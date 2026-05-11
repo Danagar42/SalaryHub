@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SalaryHub - Розрахункові листи</title>
+  
+  <!-- Завантаження Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+    }
+  </script>
+  
+  <!-- Завантаження React та ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <!-- Завантаження PropTypes -->
+  <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+  
+  <!-- Завантаження Babel -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- Завантаження Framer Motion -->
+  <script src="https://unpkg.com/framer-motion@11.0.8/dist/framer-motion.js"></script>
+  
+  <!-- Завантаження Recharts -->
+  <script src="https://unpkg.com/recharts@2.12.3/umd/Recharts.js"></script>
+
+  <!-- Завантаження Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; transition: background-color 0.3s, color 0.3s; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    
+    .dark ::-webkit-scrollbar-track { background: #1e293b; }
+    .dark ::-webkit-scrollbar-thumb { background: #475569; }
+    .dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+    /* Ховаємо скролбар для мобільного меню, щоб було красиво */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 dark:bg-slate-900 dark:text-slate-100 transition-colors duration-200 overflow-hidden">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useMemo, useEffect, useRef, createContext, useContext, useCallback } = React;
+    const { motion, AnimatePresence } = window.Motion;
+    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip: RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, LabelList, Legend } = window.Recharts;
+
+    // --- Іконки (SVG) ---
+    const IconWallet = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>;
+    const IconCalendar = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
+    const IconFileText = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg>;
+    const IconCoins = () => <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>;
+    const IconMoneyStack = () => <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 2h16"/><path d="M3 5h18"/><rect x="2" y="8" width="20" height="12" rx="2"/><circle cx="12" cy="14" r="2"/><path d="M6 14h.01"/><path d="M18 14h.01"/></svg>;
+    const IconActivity = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>;
+    const IconGlobe = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>;
+    const IconDollar = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="2" x2="12" y2="22"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>;
+    const IconPlus = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
+    const IconTrash = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>;
+    const IconEdit = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
+    const IconDownload = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
+    const IconDatabase = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>;
+    const IconCheck = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>;
+    const IconAlert = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>;
+    const IconMoon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>;
+    const IconSun = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>;
+    const IconEye = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>;
+    const IconEyeOff = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>;
+    const IconMenu = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>;
+    const IconX = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>;
+    const IconAreaChart = () => <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>;
+
+    // --- Загальні Утиліти ---
+    const MONTH_NAMES = ["Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень", "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень"];
+
+    const generateId = () => {
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+      return Date.now().toString(36) + Math.random().toString(36).substring(2);
+    };
+
+    const formatCurrency = (amount, currency = 'UAH') => {
+      const roundedAmount = Math.round(amount || 0);
+      return new Intl.NumberFormat('uk-UA', { 
+        style: 'currency', 
+        currency,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(roundedAmount);
+    };
+
+    const getTextColorGradient = (value, min, max, theme) => {
+      if (max === min) return { color: theme === 'dark' ? '#34d399' : 'hsl(120, 75%, 45%)' }; 
+      const percent = (value - min) / (max - min);
+      const lightness = theme === 'dark' ? 65 : 45;
+      return { color: `hsl(${percent * 120}, 75%, ${lightness}%)` }; 
+    };
+
+    // --- Custom Hooks ---
+    const useLocalStorage = (key, initialValue) => {
+      const [storedValue, setStoredValue] = useState(() => {
+        try {
+          const item = window.localStorage.getItem(key);
+          if (!item) return initialValue;
+          
+          const parsed = JSON.parse(item);
+          if (key === 'salaryHubData' && Array.isArray(parsed)) {
+            return parsed.map(item => {
+              if (item.id && item.id.includes('.')) {
+                const mIdx = MONTH_NAMES.indexOf(item.monthName);
+                const monthStr = String(mIdx + 1).padStart(2, '0');
+                const yearNum = item.year.toString().length === 2 ? `20${item.year}` : item.year;
+                return { ...item, id: `${yearNum}-${monthStr}`, month: mIdx + 1, year: Number(yearNum) };
+              }
+              return item;
+            });
+          }
+          return parsed;
+        } catch (error) {
+          console.error("Error reading localStorage", error);
+          return initialValue;
+        }
+      });
+
+      const setValue = (value) => {
+        try {
+          const valueToStore = value instanceof Function ? value(storedValue) : value;
+          setStoredValue(valueToStore);
+          window.localStorage.setItem(key, JSON.stringify(valueToStore));
+        } catch (error) {
+          console.error("Error setting localStorage", error);
+        }
+      };
+
+      return [storedValue, setValue];
+    };
+
+    const useExchangeRates = (dbData, historicalRates, setHistoricalRates) => {
+      const [liveNBURate, setLiveNBURate] = useState(null);
+      const [isLoadingRate, setIsLoadingRate] = useState(true);
+
+      useEffect(() => {
+        const controller = new AbortController();
+        fetch('https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&json', { signal: controller.signal })
+          .then(res => res.json())
+          .then(data => { if (data?.[0]) setLiveNBURate(data[0].rate); setIsLoadingRate(false); })
+          .catch(() => setIsLoadingRate(false));
+        return () => controller.abort();
+      }, []);
+
+      useEffect(() => {
+        if (!dbData || dbData.length === 0) return;
+        const controller = new AbortController();
+        
+        const fetchRates = async () => {
+          let updated = false;
+          const newRates = { ...historicalRates };
+
+          for (const item of dbData) {
+            if (controller.signal.aborted) break;
+            if (newRates[item.id]) continue; 
+            
+            try {
+              const dateStr = `${item.id.replace('-', '')}01`; 
+              const res = await fetch(`https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&date=${dateStr}&json`, { signal: controller.signal });
+              const data = await res.json();
+              
+              if (data?.[0]) {
+                newRates[item.id] = data[0].rate;
+                updated = true;
+              }
+              await new Promise(resolve => setTimeout(resolve, 300)); 
+            } catch (e) {
+              if (e.name !== 'AbortError') console.warn(`Не вдалося завантажити курс для ${item.id}`);
+            }
+          }
+          
+          if (updated && !controller.signal.aborted) {
+            setHistoricalRates(newRates);
+          }
+        };
+        
+        fetchRates();
+        return () => controller.abort();
+      }, [dbData, historicalRates, setHistoricalRates]);
+
+      return { liveNBURate, isLoadingRate };
+    };
+
+    // --- Модуль Парсингу (скорочено для читабельності, логіка залишена без змін) ---
+    const ParserModule = {
+      accrualKeywords: ['оклад', 'премі', 'відпустк', 'лікарнян', 'доплат', 'надбавк', 'надб', 'компенсаці', 'індексаці', 'оплат', 'допомог', 'відрядж', 'мобілізован', 'матеріал'],
+      deductionKeywords: ['аванс', 'податок', 'збір', 'внеск', 'виплачено', 'виплат', 'утриманн', 'перерахуванн', 'картк', 'банк', 'проф', 'алімент', 'борг', 'зсу', 'благодійн', 'виконавч', 'о/р'],
+      parseAmount: (str) => { if (!str || str.includes(':')) return 0; const cleanStr = str.replace(/(^"|"$)/g, '').replace(/\s/g, '').replace(',', '.'); if (/^(19|20)\d{4}$/.test(cleanStr) || /^(0[1-9]|1[0-2])(19|20)\d{2}$/.test(cleanStr)) return 0; const val = parseFloat(cleanStr); return isNaN(val) ? 0 : Math.abs(val); },
+      splitCSVLine: (str, separator) => { const result = []; let current = '', inQuotes = false; for (let i = 0; i < str.length; i++) { const char = str[i]; if (char === '"') inQuotes = !inQuotes; else if (char === separator && !inQuotes) { result.push(current); current = ''; } else current += char; } result.push(current); return result; },
+      detectPeriod: (lines) => { for (const line of lines) { const match = line.match(/за\s*(\d{1,2})\.(\d{4})/i); if (match) return { monthIdx: parseInt(match[1], 10) - 1, year: parseInt(match[2], 10) }; } return null; },
+      extractAmountFromText: (text) => { const words = text.replace(/-/g, ' ').trim().split(/\s+/); const buildNumStr = (index) => { let possibleNumStr = words[index]; let k = index - 1; while (k >= 0 && /^\d+$/.test(words[k])) { possibleNumStr = words[k] + possibleNumStr; k--; } return possibleNumStr; }; for(let i = words.length - 1; i >= 0; i--) { if (words[i].includes(':')) break; if (/^[\d,.]+$/.test(words[i]) && (words[i].includes(',') || words[i].includes('.'))) { const val = ParserModule.parseAmount(buildNumStr(i)); if (val > 0) return val; } } for(let i = words.length - 1; i >= 0; i--) { if (words[i].includes(':')) break; if (/^[\d]+$/.test(words[i])) { const possibleNumStr = buildNumStr(i); const val = ParserModule.parseAmount(possibleNumStr); if (val > 0 && !/^(19|20)\d{4}$/.test(possibleNumStr) && !/^(0[1-9]|1[0-2])(19|20)\d{2}$/.test(possibleNumStr)) { if (possibleNumStr.length <= 3 && i >= words.length - 2) continue; return val; } } } return 0; },
+      extractItems: (cols) => {
+        const isAccrualCol = (c) => { const lower = c.toLowerCase(); if (lower.includes('зсу') || lower.includes('благодійн') || lower.includes('виплат') || lower.includes('утриман')) return false; return ParserModule.accrualKeywords.some(kw => lower.includes(kw)); };
+        const isDeductionCol = (c) => { const lower = c.toLowerCase(); return ParserModule.deductionKeywords.some(kw => lower.includes(kw)) && !lower.includes('разом'); };
+        let accrual = null, deduction = null; const accIdx = cols.findIndex(isAccrualCol); const dedIdx = cols.findIndex(isDeductionCol);
+        if (accIdx !== -1) {
+          const accEndIdx = (dedIdx !== -1 && dedIdx > accIdx) ? dedIdx : cols.length; let amount = ParserModule.extractAmountFromText(cols.slice(accIdx, accEndIdx).join(' '));
+          if (amount > 0) {
+            let days = parseInt(cols[accIdx + 1]) || 0; let hoursStr = cols[accIdx + 2] || '0:0';
+            if (amount === ParserModule.parseAmount(cols[accIdx + 1])) { days = 0; hoursStr = '0:0'; } else if (amount === ParserModule.parseAmount(cols[accIdx + 2])) { hoursStr = '0:0'; }
+            let name = cols[accIdx].replace(/\s*-\s*[\d\s\.,]+$/, '').trim(); if (name.toLowerCase().includes('надб') && name.toLowerCase().includes('стаж') && name.toLowerCase().includes('енерг')) { name = 'Надбавка за стаж в енергетиці'; }
+            accrual = { id: generateId(), name, percent: '', days, hours: hoursStr, amount };
+          }
+        }
+        if (dedIdx !== -1) {
+          let amount = ParserModule.extractAmountFromText(cols.slice(dedIdx).join(' '));
+          if (amount > 0) { let name = cols[dedIdx].replace(/\s*-\s*[\d\s\.,]+$/, '').trim(); deduction = { id: generateId(), name, amount }; }
+        }
+        return { accrual, deduction };
+      },
+      parseTextPayslip: (text, isCsv) => {
+        const lines = text.split('\n'); const separator = isCsv ? (text.includes(';') ? ';' : (text.includes('\t') ? '\t' : ',')) : null;
+        const accruals = []; const deductions = []; const period = ParserModule.detectPeriod(lines);
+        lines.forEach(line => {
+          const cols = isCsv ? ParserModule.splitCSVLine(line, separator).map(c => c.trim().replace(/(^"|"$)/g, '')) : (line.includes('\t') ? line.split('\t').map(c => c.trim()) : line.split(/\s{2,}/).map(c => c.trim()));
+          const extracted = ParserModule.extractItems(cols); if (extracted.accrual) accruals.push(extracted.accrual); if (extracted.deduction) deductions.push(extracted.deduction);
+        });
+        return { success: accruals.length > 0 || deductions.length > 0, accruals, deductions, period };
+      }
+    };
+
+    // --- Анімації ---
+    const pageVariants = { initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0, transition: { duration: 0.3 } }, exit: { opacity: 0, y: -15, transition: { duration: 0.2 } } };
+    const tableContainerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.05 } }};
+    const tableRowVariants = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 }};
+
+    // --- Context API ---
+    const SalaryContext = createContext(null);
+    const useSalaryContext = () => useContext(SalaryContext);
+
+    const SalaryProvider = ({ children }) => {
+      const [theme, setTheme] = useLocalStorage('salaryHubTheme', 'light');
+      const [isPrivateMode, setIsPrivateMode] = useLocalStorage('salaryHubPrivacy', false);
+      const [activeTab, setActiveTab] = useState('dashboard');
+      const [selectedMonthId, setSelectedMonthId] = useState(null);
+      
+      const [isFormDirty, setIsFormDirty] = useState(false);
+      const [pendingTab, setPendingTab] = useState(null);
+      const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+      
+      const [editingPayslip, setEditingPayslip] = useState(null);
+      
+      const [_dbData, _setDbData] = useLocalStorage('salaryHubData', []);
+      const [hasUnexportedChanges, setHasUnexportedChanges] = useState(false);
+      
+      const dbData = _dbData;
+      const setDbData = useCallback((newData) => {
+        _setDbData(newData);
+        setHasUnexportedChanges(true);
+      }, [_setDbData]);
+
+      const [historicalRates, setHistoricalRates] = useLocalStorage('salaryHubRates_v2', {});
+      
+      const { liveNBURate, isLoadingRate } = useExchangeRates(dbData, historicalRates, setHistoricalRates);
+      const [toast, setToast] = useState(null);
+
+      useEffect(() => {
+        if (theme === 'dark') document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+      }, [theme]);
+
+      const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
+      const togglePrivateMode = () => setIsPrivateMode(prev => !prev);
+
+      const showToast = useCallback((message, type = 'success') => {
+        setToast({ message, type, id: Date.now() });
+        setTimeout(() => setToast(null), 4000);
+      }, []);
+
+      const handleTabChange = useCallback((newTab, force = false) => {
+        if (!force && isFormDirty && newTab !== activeTab) { setPendingTab(newTab); } 
+        else {
+          if (newTab !== 'add') setEditingPayslip(null);
+          setActiveTab(newTab);
+          setIsMobileMenuOpen(false);
+        }
+      }, [isFormDirty, activeTab]);
+
+      const confirmTabChange = useCallback(() => {
+        setIsFormDirty(false); setEditingPayslip(null); setActiveTab(pendingTab); setPendingTab(null); setIsMobileMenuOpen(false);
+      }, [pendingTab]);
+
+      const cancelTabChange = useCallback(() => setPendingTab(null), []);
+
+      const startEditing = useCallback((id) => {
+        const slipToEdit = dbData.find(d => d.id === id);
+        if (slipToEdit) { setEditingPayslip(slipToEdit); handleTabChange('add', true); }
+      }, [dbData, handleTabChange]);
+
+      const clearAllData = useCallback(() => {
+        setDbData([]); setHistoricalRates({}); setHasUnexportedChanges(false); showToast("Всі дані успішно видалено", "success"); handleTabChange('dashboard', true);
+      }, [setDbData, setHistoricalRates, showToast, handleTabChange]);
+
+      const generateDummyData = useCallback(() => {
+        const dummySlips = [
+            { id: '2026-03', month: 3, year: 2026, monthName: 'Березень', accruals: [{id: generateId(), name: 'Посадовий оклад', amount: 32000, days: 21, hours: '168:0'}, {id: generateId(), name: 'Премія за результатами роботи', percent: '20%', amount: 6400, days: 0, hours: '0:0'}], deductions: [{id: generateId(), name: 'Плановий аванс', amount: 15000}, {id: generateId(), name: 'Податок з доходів', amount: 6912}, {id: generateId(), name: 'Військовий збір', amount: 576}] },
+            { id: '2026-02', month: 2, year: 2026, monthName: 'Лютий', accruals: [{id: generateId(), name: 'Посадовий оклад', amount: 32000, days: 20, hours: '160:0'}, {id: generateId(), name: 'Щорічна відпустка', amount: 8500, days: 5, hours: '0:0'}], deductions: [{id: generateId(), name: 'Плановий аванс', amount: 12000}, {id: generateId(), name: 'Податок з доходів', amount: 7290}, {id: generateId(), name: 'Військовий збір', amount: 607.5}] },
+            { id: '2026-01', month: 1, year: 2026, monthName: 'Січень', accruals: [{id: generateId(), name: 'Посадовий оклад', amount: 32000, days: 22, hours: '176:0'}, {id: generateId(), name: 'Премія річна', amount: 15000, days: 0, hours: '0:0'}], deductions: [{id: generateId(), name: 'Плановий аванс', amount: 15000}, {id: generateId(), name: 'Податок з доходів', amount: 8460}, {id: generateId(), name: 'Військовий збір', amount: 705}] },
+            { id: '2025-03', month: 3, year: 2025, monthName: 'Березень', accruals: [{id: generateId(), name: 'Посадовий оклад', amount: 28000, days: 21, hours: '168:0'}], deductions: [{id: generateId(), name: 'Плановий аванс', amount: 12000}, {id: generateId(), name: 'Податок з доходів', amount: 5040}, {id: generateId(), name: 'Військовий збір', amount: 420}] },
+        ];
+        setDbData(dummySlips);
+        showToast("Демо-дані завантажено! Досліджуйте.", "success");
+        handleTabChange('dashboard');
+      }, [setDbData, showToast, handleTabChange]);
+
+      useEffect(() => {
+        const sortedData = [...dbData].sort((a, b) => a.id.localeCompare(b.id));
+        if (sortedData.length > 0 && (!selectedMonthId || !sortedData.find(d => d.id === selectedMonthId))) {
+          setSelectedMonthId(sortedData[sortedData.length - 1].id);
+        }
+      }, [dbData, selectedMonthId]);
+
+      const summaryData = useMemo(() => {
+        const sortedDbData = [...dbData].sort((a, b) => b.id.localeCompare(a.id)); 
+        
+        return sortedDbData.map((month, index, array) => {
+          const validAccruals = month.accruals.filter(a => !a.name.toLowerCase().match(/виплачен[оі].*відпускн/)).map(a => {
+               if (a.name.toLowerCase().includes('надб') && a.name.toLowerCase().includes('стаж') && a.name.toLowerCase().includes('енерг')) return { ...a, name: 'Надбавка за стаж в енергетиці' };
+               return a;
+          });
+          const validDeductions = month.deductions.filter(d => !d.name.toLowerCase().match(/виплачен[оі].*відпускн/));
+
+          const totalAccrued = validAccruals.reduce((sum, item) => sum + Number(item.amount), 0);
+          const totalDeducted = validDeductions.reduce((sum, item) => sum + Number(item.amount), 0);
+          
+          const totalBonuses = validAccruals.filter(a => a.name.toLowerCase().includes('премі') && !a.name.toLowerCase().includes('за рік') && !a.name.toLowerCase().includes('річн')).reduce((sum, item) => sum + Number(item.amount), 0);
+
+          let prevMonthVacationPayout = 0; let calculatedBonusPercent = null; let bonusPercentNumeric = 0;
+
+          if (index < array.length - 1) {
+            const prevMonth = array[index + 1];
+            const currDate = new Date(month.year, month.month - 1); const prevDate = new Date(prevMonth.year, prevMonth.month - 1);
+            const diffMonths = (currDate.getFullYear() - prevDate.getFullYear()) * 12 + (currDate.getMonth() - prevDate.getMonth());
+            
+            if (diffMonths === 1) {
+              const vacationInDeductions = prevMonth.deductions.filter(d => d.name.toLowerCase().match(/виплачен[оі].*відпускн/)).reduce((sum, item) => sum + Number(item.amount), 0);
+              const vacationInAccruals = prevMonth.accruals.filter(a => a.name.toLowerCase().match(/виплачен[оі].*відпускн/)).reduce((sum, item) => sum + Number(item.amount), 0);
+              prevMonthVacationPayout = vacationInDeductions + vacationInAccruals;
+
+              if (totalBonuses > 0) {
+                const prevOkladTotal = prevMonth.accruals.filter(a => a.name.toLowerCase().includes('оклад')).reduce((sum, item) => sum + Number(item.amount), 0);
+                if (prevOkladTotal > 0) {
+                  let percentVal = ((totalBonuses / prevOkladTotal) * 100); percentVal = Math.round(percentVal / 5) * 5;
+                  bonusPercentNumeric = percentVal; calculatedBonusPercent = percentVal + '%';
+                }
+              }
+            }
+          }
+
+          const advanceSum = validDeductions.filter(d => d.name.toLowerCase().match(/аванс/)).reduce((sum, item) => sum + Number(item.amount), 0);
+          const explicitBankSum = validDeductions.filter(d => d.name.toLowerCase().match(/перерахування|банк|картк|о\/р/)).reduce((sum, item) => sum + Number(item.amount), 0);
+          const taxes = validDeductions.filter(d => !d.name.toLowerCase().match(/аванс|перерахування|банк|картк|о\/р/)).reduce((sum, item) => sum + Number(item.amount), 0);
+            
+          const toBank = explicitBankSum > 0 ? explicitBankSum : (totalAccrued - totalDeducted);
+          const netPay = advanceSum + toBank + prevMonthVacationPayout;
+          
+          let okladAmount = 0; let okladHours = 0; let stazhAmount = 0;
+          
+          validAccruals.forEach(a => {
+            const lowerName = a.name.toLowerCase();
+            if (lowerName.includes('оклад')) {
+              okladAmount += Number(a.amount);
+              if (a.hours) {
+                const hoursStr = String(a.hours);
+                if (hoursStr.includes(':')) { const parts = hoursStr.split(':'); okladHours += (parseInt(parts[0], 10) || 0) + ((parseInt(parts[1], 10) || 0) / 60); } 
+                else { okladHours += parseFloat(hoursStr) || 0; }
+              }
+            }
+            if (lowerName.includes('стаж в енергетиці')) stazhAmount += Number(a.amount);
+          });
+          const hourlyRate = okladHours > 0 ? ((okladAmount + stazhAmount) / okladHours) : 0;
+          const hasVacation = validAccruals.some(a => a.name.toLowerCase().includes('щорічна відпуст'));
+
+          const actualRate = historicalRates[month.id] || 40.0;
+          const hourlyRateUSD = hourlyRate / actualRate;
+          
+          return { 
+            ...month, accruals: validAccruals, deductions: validDeductions,
+            totalAccrued, totalDeducted, taxes, netPay, toBank, advanceSum, prevMonthVacationPayout, totalBonuses, hasVacation, calculatedBonusPercent, bonusPercentNumeric, hourlyRate, hourlyRateUSD,
+            usdEquivalent: netPay / actualRate, exchangeRate: actualRate
+          };
+        });
+      }, [dbData, historicalRates]);
+
+      const deletePayslip = useCallback((idToDelete) => {
+        setDbData(prev => prev.filter(d => d.id !== idToDelete)); showToast("Розрахунковий лист видалено", "success");
+      }, [setDbData, showToast]);
+
+      useEffect(() => {
+        const handleBeforeUnload = (e) => { if (hasUnexportedChanges) { e.preventDefault(); e.returnValue = 'У вас є неекспортовані зміни!'; } };
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+      }, [hasUnexportedChanges]);
+
+      const generateAndDownloadJSONFile = useCallback(async (dataToExport) => {
+        try {
+          const jsonData = JSON.stringify(dataToExport, null, 2);
+          if (window.showSaveFilePicker) {
+            const handle = await window.showSaveFilePicker({ suggestedName: 'salaryData.json', types: [{ description: 'JSON File', accept: { 'application/json': ['.json'] } }] });
+            const writable = await handle.createWritable(); await writable.write(jsonData); await writable.close();
+            setHasUnexportedChanges(false); showToast("Базу успішно експортовано!", "success");
+          } else {
+            const blob = new Blob([jsonData], { type: 'application/json;charset=utf-8' }); const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = `salaryData.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            setHasUnexportedChanges(false); showToast("Базу завантажено!", "success");
+          }
+        } catch (err) {
+          if (err.name !== 'AbortError') { showToast("Помилка збереження файлу", "error"); console.error(err); }
+        }
+      }, [showToast]);
+
+      const contextValue = useMemo(() => ({
+        theme, toggleTheme, isPrivateMode, togglePrivateMode,
+        activeTab, handleTabChange, pendingTab, confirmTabChange, cancelTabChange,
+        selectedMonthId, setSelectedMonthId, setIsFormDirty, editingPayslip, setEditingPayslip, startEditing, clearAllData, generateDummyData,
+        dbData, setDbData, summaryData, liveNBURate, isLoadingRate, historicalRates,
+        generateAndDownloadJSONFile, deletePayslip, showToast, hasUnexportedChanges,
+        isMobileMenuOpen, setIsMobileMenuOpen
+      }), [theme, isPrivateMode, activeTab, pendingTab, selectedMonthId, editingPayslip, dbData, summaryData, liveNBURate, isLoadingRate, historicalRates, handleTabChange, confirmTabChange, cancelTabChange, setDbData, generateAndDownloadJSONFile, deletePayslip, showToast, hasUnexportedChanges, startEditing, clearAllData, generateDummyData, isMobileMenuOpen]);
+      
+      return (
+        <SalaryContext.Provider value={contextValue}>
+          {children}
+          <AnimatePresence>
+            {toast && (
+              <motion.div initial={{ opacity: 0, y: 50, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.9 }}
+                className={`fixed bottom-6 right-6 z-[100] flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl font-medium text-sm border ${
+                  toast.type === 'error' ? 'bg-rose-50 dark:bg-rose-900/40 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-800' :
+                  toast.type === 'warning' ? 'bg-amber-50 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800' : 'bg-emerald-50 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                }`}
+              >
+                <IconAlert /> {toast.message}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </SalaryContext.Provider>
+      );
+    };
+
+    // --- UI Components ---
+    const AnimatedNumber = ({ value, currency = 'UAH', className = "" }) => {
+      const { isPrivateMode } = useSalaryContext();
+      const displayValue = formatCurrency(value, currency);
+      return (
+        <span className={`inline-flex overflow-hidden relative align-bottom ${className} ${isPrivateMode ? 'filter blur-[6px] select-none opacity-50 transition-all duration-300' : 'transition-all duration-300'}`}>
+          <AnimatePresence mode="popLayout">
+            <motion.span key={value} initial={{ y: "100%", opacity: 0, filter: "blur(4px)" }} animate={{ y: "0%", opacity: 1, filter: "blur(0px)" }} exit={{ y: "-100%", opacity: 0, filter: "blur(4px)" }} transition={{ type: "spring", bounce: 0, duration: 0.4 }} className="inline-block">
+              {displayValue}
+            </motion.span>
+          </AnimatePresence>
+        </span>
+      );
+    };
+
+    const PrivacyText = ({ text, className = "" }) => {
+      const { isPrivateMode } = useSalaryContext();
+      return <span className={`${className} ${isPrivateMode ? 'filter blur-[6px] select-none opacity-50 transition-all duration-300' : 'transition-all duration-300'}`}>{text}</span>;
+    };
+
+    const CustomSelect = ({ value, onChange, options, icon: Icon, prefix = "", wrapperClass = "bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200", dropdownClass="w-full min-w-[220px]" }) => {
+      const [isOpen, setIsOpen] = useState(false);
+      const dropdownRef = useRef(null);
+
+      useEffect(() => {
+        const handleClickOutside = (event) => { if (dropdownRef.current && !dropdownRef.current.contains(event.target)) setIsOpen(false); };
+        document.addEventListener('mousedown', handleClickOutside); return () => document.removeEventListener('mousedown', handleClickOutside);
+      }, []);
+
+      const selectedOption = options.find(opt => opt.value === value) || options[0];
+
+      return (
+        <div className="relative w-full md:w-auto min-w-[200px]" ref={dropdownRef}>
+          <motion.div whileTap={{ scale: 0.97 }} onClick={() => setIsOpen(!isOpen)} className={`flex items-center justify-between space-x-3 p-2.5 rounded-xl border w-full cursor-pointer transition-colors ${wrapperClass}`}>
+            <div className="flex items-center gap-2">
+              {Icon && <div className="text-slate-400 dark:text-slate-500 pl-1"><Icon /></div>}
+              <span className="font-bold text-base select-none truncate">{prefix && <span className="font-medium opacity-70 mr-1.5">{prefix}</span>}{selectedOption ? selectedOption.label : 'Оберіть...'}</span>
+            </div>
+            <div className="pr-1 opacity-50"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}><polyline points="6 9 12 15 18 9"></polyline></svg></div>
+          </motion.div>
+          <AnimatePresence>
+            {isOpen && (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.15 }} className={`absolute top-full right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden ${dropdownClass}`}>
+                <div className="max-h-64 overflow-y-auto">
+                  {options.map(opt => (
+                    <div key={opt.value} onClick={() => { onChange(opt.value); setIsOpen(false); }} className={`px-4 py-3 cursor-pointer transition-colors flex items-center justify-between ${value === opt.value ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-bold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>
+                      <span className="truncate">{opt.label}</span>
+                      {value === opt.value && <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 ml-3"><polyline points="20 6 9 17 4 12"></polyline></svg>}
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      );
+    };
+
+    const ConfirmDeleteButton = ({ onConfirm }) => {
+      const [isConfirming, setIsConfirming] = useState(false);
+      return (
+        <button onClick={() => isConfirming ? onConfirm() : setIsConfirming(true)} onMouseLeave={() => setIsConfirming(false)} className={`font-semibold text-sm transition-colors px-2 py-1.5 rounded-lg flex items-center justify-center min-w-[32px] ${isConfirming ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-400 w-[70px]' : 'text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-slate-800'}`} aria-label={isConfirming ? "Підтвердити" : "Видалити"} title="Видалити">
+          {isConfirming ? "Точно?" : <IconTrash />}
+        </button>
+      );
+    };
+
+    const CustomRechartsTooltip = ({ active, payload, mode }) => {
+      const { isPrivateMode } = useSalaryContext();
+      if (active && payload && payload.length) {
+        const pointData = payload[0].payload;
+        return (
+          <div className="bg-slate-800 dark:bg-slate-900 text-white text-xs py-3 px-4 rounded-xl shadow-xl flex flex-col gap-1.5 border border-slate-700 dark:border-slate-600 min-w-[150px]">
+            <div className="font-semibold text-slate-300 mb-1 border-b border-slate-700 dark:border-slate-600 pb-1.5 flex justify-between items-center">
+              <span>{pointData.monthName} {pointData.year}</span>
+              {pointData.hasVacation && <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded ml-2">Відпустка</span>}
+            </div>
+            {mode === 'hourly' ? (
+              <>
+                <div className="flex justify-between items-center gap-4 mt-1"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-cyan-500"></div><span className="text-slate-400 font-medium">За годину (₴)</span></div><span className="font-bold text-white">{isPrivateMode ? '***' : formatCurrency(pointData.hourlyRate)}</span></div>
+                <div className="flex justify-between items-center gap-4"><div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-400"></div><span className="text-slate-400 font-medium">За годину ($)</span></div><span className="font-bold text-slate-200">{isPrivateMode ? '***' : formatCurrency(pointData.hourlyRateUSD, 'USD')}</span></div>
+              </>
+            ) : mode === 'bonus' ? (
+              <div className="flex justify-between items-center gap-4 mt-1"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-purple-500"></div><span className="text-slate-400 font-medium">Премія</span></div><span className="font-bold text-white">{isPrivateMode ? '***' : (pointData.calculatedBonusPercent || '0%')}</span></div>
+            ) : (
+              <>
+                <div className="flex justify-between items-center gap-4 mt-1"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div><span className="text-slate-400 font-medium">Гривні</span></div><span className="font-bold text-white">{isPrivateMode ? '***' : formatCurrency(pointData.netPay)}</span></div>
+                <div className="flex justify-between items-center gap-4"><div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-400"></div><span className="text-slate-400 font-medium">Долари</span></div><span className="font-bold text-slate-200">{isPrivateMode ? '***' : formatCurrency(pointData.usdEquivalent, 'USD')}</span></div>
+              </>
+            )}
+          </div>
+        );
+      }
+      return null;
+    };
+
+    const CustomPieTooltip = ({ active, payload }) => {
+      const { isPrivateMode } = useSalaryContext();
+      if (active && payload && payload.length) {
+        const data = payload[0];
+        return (
+          <div className="bg-slate-800 dark:bg-slate-900 text-white text-sm py-2.5 px-3.5 rounded-xl shadow-xl border border-slate-700 dark:border-slate-600 flex flex-col gap-1 z-50">
+            <span className="font-medium text-slate-300">{data.name}</span>
+            <span className="font-bold text-white">{isPrivateMode ? '***' : formatCurrency(data.value)}</span>
+          </div>
+        );
+      }
+      return null;
+    };
+
+    const DashboardChart = ({ data, showYearInLabels, theme, mode, isPrivateMode }) => {
+      const chartData = [...data].reverse();
+      const gridStroke = theme === 'dark' ? '#334155' : '#e2e8f0';
+      const tickFill = theme === 'dark' ? '#94a3b8' : '#64748b';
+      const tooltipCursor = theme === 'dark' ? '#475569' : '#cbd5e1';
+
+      // Компонент для лаконічного виведення значень на графіку
+      const CustomChartLabel = (props) => {
+        const { x, y, value, index, dataKey } = props;
+        if (isPrivateMode || !value) return null;
+
+        const isFirst = index === 0;
+        const isLast = index === chartData.length - 1;
+        let isLocalPeak = false;
+
+        // Шукаємо "піки" та "впадини", щоб вивести значення тільки там
+        if (index > 0 && index < chartData.length - 1) {
+            const prev = chartData[index - 1][dataKey] || 0;
+            const next = chartData[index + 1][dataKey] || 0;
+            if ((value > prev && value >= next) || (value < prev && value <= next)) {
+                isLocalPeak = true;
+            }
+        }
+
+        // Якщо точок мало (<=12), показуємо всі. Якщо багато — тільки важливі.
+        const showLabel = chartData.length <= 12 || isFirst || isLast || isLocalPeak;
+        if (!showLabel) return null;
+
+        let displayValue = value;
+        let color = theme === 'dark' ? '#94a3b8' : '#64748b';
+
+        if (mode === 'bonus') {
+            displayValue = `${value}%`;
+            color = theme === 'dark' ? '#d8b4fe' : '#9333ea';
+        } else if (mode === 'hourly') {
+            displayValue = Math.round(value);
+            color = theme === 'dark' ? '#67e8f9' : '#0891b2';
+        } else {
+            displayValue = value >= 1000 ? `${(value / 1000).toFixed(value % 1000 === 0 ? 0 : 1).replace('.0', '')}к` : value;
+            color = theme === 'dark' ? '#6ee7b7' : '#059669';
+        }
+
+        // Щоб текст не перекривав лінію: якщо це "впадина" (мінімум), малюємо цифру знизу
+        let yPos = y - 12;
+        if (index > 0 && index < chartData.length - 1) {
+             const prev = chartData[index - 1][dataKey] || 0;
+             const next = chartData[index + 1][dataKey] || 0;
+             if (value <= prev && value <= next) {
+                 yPos = y + 20; 
+             }
+        }
+
+        return (
+            <text x={x} y={yPos} fill={color} fontSize={11} fontWeight={700} textAnchor="middle" style={{ filter: theme === 'dark' ? 'drop-shadow(0px 2px 2px rgba(0,0,0,0.5))' : 'none' }}>
+                {displayValue}
+            </text>
+        );
+      };
+
+      const getTicks = (key, targetCount, minZero = false) => {
+        const maxVal = Math.max(...chartData.map(d => d[key] || 0)); const minVal = Math.min(...chartData.map(d => d[key] || 0));
+        const diff = maxVal - (minZero ? 0 : minVal); let step;
+        if (diff > 0) { const rawStep = diff / targetCount; const mag = Math.pow(10, Math.floor(Math.log10(rawStep))); const res = rawStep / mag; if (res <= 1.5) step = 1 * mag; else if (res <= 3.5) step = 2.5 * mag; else if (res <= 7.5) step = 5 * mag; else step = 10 * mag; } 
+        else { step = maxVal === 0 ? 10 : Math.pow(10, Math.floor(Math.log10(maxVal))); if (step > maxVal && maxVal > 0) step = maxVal; }
+        let start = minZero ? 0 : Math.floor(minVal / step) * step; if (start < 0) start = 0; let end = Math.ceil(maxVal / step) * step; if (start === end) end += step;
+        const ticks = []; for (let i = start; i <= end + (step / 10); i += step) ticks.push(Math.round(i * 100) / 100); return ticks;
+      };
+
+      if (mode === 'bonus') {
+        let bonusTicks = getTicks('bonusPercentNumeric', 4, true); if (bonusTicks[bonusTicks.length - 1] < 100) bonusTicks = [0, 25, 50, 75, 100];
+        return (
+          <div style={{ width: '100%', height: 320 }}>
+            <ResponsiveContainer><LineChart data={chartData} margin={{ top: 15, right: 15, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} /><XAxis dataKey="id" tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} /><YAxis dataKey="bonusPercentNumeric" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : `${val}%`} domain={[bonusTicks[0], bonusTicks[bonusTicks.length - 1]]} ticks={bonusTicks} width={45} /><RechartsTooltip content={<CustomRechartsTooltip mode="bonus" />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} /><Line type="monotone" dataKey="bonusPercentNumeric" name="Премія (%)" stroke="#a855f7" strokeWidth={3} dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#a855f7', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#a855f7', strokeWidth: 0 }} isAnimationActive={true}><LabelList dataKey="bonusPercentNumeric" content={(props) => <CustomChartLabel {...props} dataKey="bonusPercentNumeric" />}/></Line></LineChart></ResponsiveContainer>
+          </div>
+        );
+      }
+      if (mode === 'hourly') {
+        const uahTicks = getTicks('hourlyRate', 4); const usdTicks = getTicks('hourlyRateUSD', 4);
+        return (
+          <div style={{ width: '100%', height: 320 }}>
+            <ResponsiveContainer><LineChart data={chartData} margin={{ top: 15, right: 0, left: 5, bottom: 0 }}><defs><linearGradient id="colorHourly" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#06b6d4" stopOpacity={1}/><stop offset="100%" stopColor="#3b82f6" stopOpacity={1}/></linearGradient></defs><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} /><XAxis dataKey="id" tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} /><YAxis yAxisId="left" dataKey="hourlyRate" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : formatCurrency(val)} domain={[uahTicks[0], uahTicks[uahTicks.length - 1]]} ticks={uahTicks} width={85} /><YAxis yAxisId="right" orientation="right" dataKey="hourlyRateUSD" axisLine={false} tickLine={false} tick={{ fill: tickFill, opacity: 0.7, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : formatCurrency(val, 'USD')} domain={[usdTicks[0], usdTicks[usdTicks.length - 1]]} ticks={usdTicks} width={75} /><RechartsTooltip content={<CustomRechartsTooltip mode="hourly" />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} /><Line yAxisId="left" type="monotone" dataKey="hourlyRate" name="Гривні/год (₴)" stroke="url(#colorHourly)" strokeWidth={3} dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#06b6d4', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#06b6d4', strokeWidth: 0 }} isAnimationActive={true}><LabelList dataKey="hourlyRate" content={(props) => <CustomChartLabel {...props} dataKey="hourlyRate" />}/></Line><Line yAxisId="right" type="monotone" dataKey="hourlyRateUSD" name="Долари/год ($)" stroke={tickFill} strokeWidth={1.5} strokeDasharray="6 6" dot={{ r: 2, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: tickFill }} activeDot={{ r: 4, fill: tickFill, strokeWidth: 0 }} isAnimationActive={true} /></LineChart></ResponsiveContainer>
+          </div>
+        );
+      }
+
+      const uahTicks = getTicks('netPay', 4); const usdTicks = getTicks('usdEquivalent', 4);
+      return (
+        <div style={{ width: '100%', height: 320 }}>
+          <ResponsiveContainer><LineChart data={chartData} margin={{ top: 15, right: 0, left: 5, bottom: 0 }}><defs><linearGradient id="colorUah" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={1}/><stop offset="50%" stopColor="#f59e0b" stopOpacity={1}/><stop offset="100%" stopColor="#ef4444" stopOpacity={1}/></linearGradient></defs><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} /><XAxis dataKey="id" tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} /><YAxis yAxisId="left" dataKey="netPay" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : formatCurrency(val)} domain={[uahTicks[0], uahTicks[uahTicks.length - 1]]} ticks={uahTicks} width={85} /><YAxis yAxisId="right" orientation="right" dataKey="usdEquivalent" axisLine={false} tickLine={false} tick={{ fill: tickFill, opacity: 0.7, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : formatCurrency(val, 'USD')} domain={[usdTicks[0], usdTicks[usdTicks.length - 1]]} ticks={usdTicks} width={75} /><RechartsTooltip content={<CustomRechartsTooltip mode="income" />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} /><Line yAxisId="left" type="monotone" dataKey="netPay" name="В гривнях (₴)" stroke="url(#colorUah)" strokeWidth={3} dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#10b981', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#10b981', strokeWidth: 0 }} isAnimationActive={true}><LabelList dataKey="netPay" content={(props) => <CustomChartLabel {...props} dataKey="netPay" />}/></Line><Line yAxisId="right" type="monotone" dataKey="usdEquivalent" name="В доларах ($)" stroke={tickFill} strokeWidth={1.5} strokeDasharray="6 6" dot={{ r: 2, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: tickFill }} activeDot={{ r: 4, fill: tickFill, strokeWidth: 0 }} isAnimationActive={true} /></LineChart></ResponsiveContainer>
+        </div>
+      );
+    };
+
+    const DashboardView = () => {
+      const { dbData, summaryData, liveNBURate, isLoadingRate, handleTabChange, setSelectedMonthId, deletePayslip, theme, startEditing, isPrivateMode, generateDummyData } = useSalaryContext();
+      const [selectedYear, setSelectedYear] = useState('all');
+      const [chartMode, setChartMode] = useState('income');
+
+      if (dbData.length === 0) {
+        return (
+          <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="flex flex-col items-center justify-center py-20 text-center px-4">
+            <div className="relative mb-6 mt-4">
+              <div className="absolute inset-0 bg-blue-400 rounded-full animate-ping opacity-20"></div>
+              <div className="w-24 h-24 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center text-blue-500 dark:text-blue-400 shadow-inner relative z-10 border-4 border-white dark:border-slate-900"><IconFileText /></div>
+            </div>
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">Немає збережених даних</h2>
+            <p className="text-slate-500 dark:text-slate-400 max-w-md mb-8">База даних порожня. Додайте свій перший розрахунковий лист, або завантажте ваш файл <b>salaryData.json</b> через меню зліва.</p>
+            <div className="flex flex-col sm:flex-row gap-3 items-center">
+              <motion.button whileTap={{ scale: 0.95 }} onClick={() => handleTabChange('add')} className="px-6 py-3 font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-md flex items-center gap-2"><IconPlus /> Додати дані</motion.button>
+              <motion.button whileTap={{ scale: 0.95 }} onClick={generateDummyData} className="px-6 py-3 font-bold text-slate-700 bg-white border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors"><IconDatabase /> Демо-дані</motion.button>
+            </div>
+          </motion.div>
+        );
+      }
+
+      const availableYears = [...new Set(summaryData.map(d => d.year))].sort((a, b) => b - a);
+      const dashboardData = selectedYear === 'all' ? summaryData : summaryData.filter(d => d.year.toString() === selectedYear);
+
+      const avgEarnedUAH = dashboardData.length ? dashboardData.reduce((sum, m) => sum + m.netPay, 0) / dashboardData.length : 0;
+      const avgEarnedUSD = dashboardData.length ? dashboardData.reduce((sum, m) => sum + m.usdEquivalent, 0) / dashboardData.length : 0;
+      const minNetPay = dashboardData.length ? Math.min(...dashboardData.map(d => d.netPay)) : 0;
+      const maxNetPay = dashboardData.length ? Math.max(...dashboardData.map(d => d.netPay)) : 0;
+
+      // Підрахунок YoY для середнього доходу
+      let yoyAvgNode = null;
+      if (summaryData.length > 0) {
+        const yearToCompare = selectedYear !== 'all' ? parseInt(selectedYear) : Math.max(...summaryData.map(d => d.year));
+        const prevYear = yearToCompare - 1;
+        const currYearData = summaryData.filter(d => d.year === yearToCompare);
+        const prevYearData = summaryData.filter(d => d.year === prevYear);
+
+        if (currYearData.length > 0 && prevYearData.length > 0) {
+          const currAvg = currYearData.reduce((sum, m) => sum + m.netPay, 0) / currYearData.length;
+          const prevAvg = prevYearData.reduce((sum, m) => sum + m.netPay, 0) / prevYearData.length;
+          const diff = currAvg - prevAvg;
+          const percent = prevAvg > 0 ? (diff / prevAvg) * 100 : 0;
+
+          if (diff !== 0) {
+            const isPositive = diff > 0;
+            yoyAvgNode = (
+              <div className="mt-2 flex flex-wrap items-center text-xs font-medium gap-2">
+                <span className="text-slate-400">до середнього за {prevYear} рік:</span>
+                <span className={`flex items-center px-2 py-0.5 rounded-md border ${isPositive ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800' : 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800'}`}>
+                  {isPositive ? '+' : ''}{percent.toFixed(1)}%
+                  <svg className="w-3 h-3 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isPositive ? "M5 10l7-7m0 0l7 7m-7-7v18" : "M19 14l-7 7m0 0l-7-7m7 7V3"} />
+                  </svg>
+                </span>
+                <span className="text-slate-400">({isPositive ? '+' : ''}<PrivacyText text={formatCurrency(diff)} />)</span>
+              </div>
+            );
+          }
+        }
+      }
+
+      const renderTableRows = () => {
+        const rows = []; let currentYear = null;
+        dashboardData.forEach((row, index) => {
+          if (selectedYear === 'all' && row.year !== currentYear) {
+            rows.push(<tr key={`year-${row.year}`} className="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700"><td colSpan="5" className="px-6 py-2.5 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">{row.year} рік</td></tr>);
+            currentYear = row.year;
+          }
+          rows.push(
+            <motion.tr variants={tableRowVariants} key={row.id} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/30 transition-colors border-b border-slate-100 dark:border-slate-700/50 last:border-0">
+              <td className="px-6 py-4 font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap"><div className="flex items-center gap-2"><span>{row.monthName} <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">{selectedYear !== 'all' ? row.year : ''}</span></span>{row.hasVacation && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800">ВІДПУСТКА</span>}</div></td>
+              <td className="px-6 py-4 text-right font-bold tabular-nums whitespace-nowrap" style={getTextColorGradient(row.netPay, minNetPay, maxNetPay, theme)}><PrivacyText text={formatCurrency(row.netPay)} /></td>
+              <td className="px-6 py-4 text-blue-600 dark:text-blue-400 font-bold text-right tabular-nums whitespace-nowrap"><span title={`Курс НБУ: ${Number(row.exchangeRate).toFixed(2)}`} className="border-b border-dashed border-blue-200 dark:border-blue-800/50 pb-0.5 cursor-help"><PrivacyText text={formatCurrency(row.usdEquivalent, 'USD')} /></span></td>
+              <td className="px-6 py-4 text-center whitespace-nowrap">{row.calculatedBonusPercent ? <span className="font-bold text-purple-600 dark:text-purple-400 tabular-nums">{row.calculatedBonusPercent}</span> : <span className="text-slate-300 dark:text-slate-600">-</span>}</td>
+              <td className="px-6 py-4 text-center whitespace-nowrap"><div className="flex items-center justify-center gap-2"><button onClick={() => { setSelectedMonthId(row.id); handleTabChange('payslips'); }} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-semibold text-sm transition-colors bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 px-3 py-1.5 rounded-lg">Корінець</button><button onClick={() => startEditing(row.id)} className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 p-1.5 rounded-lg transition-colors" title="Редагувати"><IconEdit /></button><ConfirmDeleteButton onConfirm={() => deletePayslip(row.id)} /></div></td>
+            </motion.tr>
+          );
+        });
+        return rows;
+      };
+
+      return (
+        <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-6 max-w-6xl mx-auto pb-10">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 gap-4 transition-colors">
+            <div>
+              <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Статистика {selectedYear === 'all' ? 'за весь час' : `за ${selectedYear} рік`}</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Оберіть період для перегляду аналітики</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center space-x-2 bg-slate-50 dark:bg-slate-900/50 px-3 py-2 rounded-xl border border-slate-100 dark:border-slate-700 transition-colors">
+                <span className={`transition-colors ${isLoadingRate ? 'text-emerald-500 dark:text-emerald-400 animate-pulse' : 'text-emerald-600 dark:text-emerald-500'}`}><IconDollar /></span><span className="text-sm font-medium text-slate-600 dark:text-slate-300">Курс USD:</span>
+                {isLoadingRate ? <div className="h-5 w-16 bg-slate-200 dark:bg-slate-700 rounded animate-pulse"></div> : <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{liveNBURate ? formatCurrency(liveNBURate, 'UAH') : 'Помилка'}</span>}
+              </div>
+              <CustomSelect value={selectedYear} onChange={setSelectedYear} options={[{ value: 'all', label: 'За весь час' }, ...availableYears.map(y => ({ value: y.toString(), label: y.toString() }))]} prefix="Період:" wrapperClass="bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800/50 text-blue-900 dark:text-blue-200" />
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between transition-colors gap-4">
+            <div className="flex items-center space-x-5">
+              <div className="p-3.5 bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-xl shadow-lg shadow-emerald-500/30 ring-4 ring-emerald-50 dark:ring-emerald-900/20"><IconMoneyStack /></div>
+              <div>
+                <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-1">Середній дохід в міс.</p>
+                <div className="flex flex-wrap items-baseline gap-2 md:gap-3">
+                  <h3 className="text-3xl font-black text-blue-600 dark:text-blue-400"><AnimatedNumber value={avgEarnedUAH} currency="UAH" /></h3>
+                  <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">~ <AnimatedNumber value={avgEarnedUSD} currency="USD" /></span>
+                </div>
+                {yoyAvgNode}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-800 p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+              <div className="flex items-center gap-4 flex-wrap">
+                <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2"><IconActivity /> Динаміка</h2>
+                {dashboardData.length > 1 && (
+                  <div className="flex bg-slate-100 dark:bg-slate-900/80 p-1 rounded-xl transition-colors border border-slate-200 dark:border-slate-700/50">
+                    <button onClick={() => setChartMode('income')} className={`px-3 md:px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${chartMode === 'income' ? 'bg-white dark:bg-slate-800 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}>Дохід</button>
+                    <button onClick={() => setChartMode('bonus')} className={`px-3 md:px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${chartMode === 'bonus' ? 'bg-white dark:bg-slate-800 shadow-sm text-purple-600 dark:text-purple-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}>Премії %</button>
+                    <button onClick={() => setChartMode('hourly')} className={`px-3 md:px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${chartMode === 'hourly' ? 'bg-white dark:bg-slate-800 shadow-sm text-cyan-600 dark:text-cyan-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}>За год.</button>
+                  </div>
+                )}
+              </div>
+              
+              {/* Кастомна легенда, перенесена в шапку блоку */}
+              {dashboardData.length > 1 && (
+                <div className="hidden sm:flex flex-col gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 items-end">
+                  {chartMode === 'income' && (
+                    <>
+                      <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div>В гривнях (₴)</div>
+                      <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-slate-400 dark:bg-slate-500"></div>В доларах ($)</div>
+                    </>
+                  )}
+                  {chartMode === 'bonus' && (
+                    <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-purple-500"></div>Премія (%)</div>
+                  )}
+                  {chartMode === 'hourly' && (
+                    <>
+                      <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-cyan-500"></div>Гривні/год (₴)</div>
+                      <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-slate-400 dark:bg-slate-500"></div>Долари/год ($)</div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+            {dashboardData.length > 1 ? <DashboardChart data={dashboardData} showYearInLabels={selectedYear === 'all'} theme={theme} mode={chartMode} isPrivateMode={isPrivateMode} /> : (
+              <div className="h-64 flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 mx-2">
+                <IconAreaChart /><p className="mt-3 text-sm font-medium">Додайте дані хоча б за два місяці для побудови графіка</p>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors">
+            <div className="p-5 md:p-6 border-b border-slate-100 dark:border-slate-700"><h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Зведена таблиця</h2></div>
+            <div className="overflow-x-auto overflow-y-auto max-h-[600px] no-scrollbar">
+              <table className="w-full text-left text-sm relative">
+                <thead className="bg-slate-50 dark:bg-slate-900/90 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-20 backdrop-blur-sm">
+                  <tr><th className="px-6 py-4 font-semibold whitespace-nowrap">Місяць</th><th className="px-6 py-4 font-bold text-emerald-700 dark:text-emerald-500 text-right whitespace-nowrap">Зарплата</th><th className="px-6 py-4 font-bold text-blue-700 dark:text-blue-500 text-right whitespace-nowrap">В доларах ($)</th><th className="px-6 py-4 font-semibold text-center whitespace-nowrap">Премія</th><th className="px-6 py-4 font-semibold text-center whitespace-nowrap">Дія</th></tr>
+                </thead>
+                <motion.tbody variants={tableContainerVariants} initial="hidden" animate="show">
+                  {renderTableRows()}
+                </motion.tbody>
+              </table>
+            </div>
+          </div>
+        </motion.div>
+      );
+    };
+
+    const PayslipView = () => {
+      const { summaryData, dbData, selectedMonthId, setSelectedMonthId, startEditing } = useSalaryContext();
+      const activeMonthData = summaryData.find(m => m.id === selectedMonthId) || summaryData[0];
+      const [showMath, setShowMath] = useState(false);
+
+      if (!activeMonthData) return <div className="flex justify-center items-center h-64 text-slate-400">Немає даних.</div>;
+
+      const advanceSum = activeMonthData.advanceSum || 0;
+      const taxSum = activeMonthData.taxes || 0;
+
+      // --- Розрахунок Pie Charts ---
+      const ACCRUAL_COLORS = { 'Оклад': '#3b82f6', 'Премія': '#8b5cf6', 'Відпускні': '#f59e0b', 'Інше': '#94a3b8' };
+      const DEDUCTION_PALETTE = ['#f43f5e', '#f97316', '#eab308', '#84cc16', '#06b6d4', '#6366f1', '#a855f7'];
+
+      const accrualCategories = { 'Оклад': 0, 'Премія': 0, 'Відпускні': 0, 'Інше': 0 };
+      activeMonthData.accruals.forEach(a => {
+          const name = a.name.toLowerCase();
+          if (name.includes('оклад') || name.includes('тариф')) accrualCategories['Оклад'] += Number(a.amount);
+          else if (name.includes('премі')) accrualCategories['Премія'] += Number(a.amount);
+          else if (name.includes('відпуст')) accrualCategories['Відпускні'] += Number(a.amount);
+          else accrualCategories['Інше'] += Number(a.amount);
+      });
+      const accrualPieData = Object.entries(accrualCategories).filter(([k, v]) => v > 0).map(([name, value]) => ({ name, value, color: ACCRUAL_COLORS[name] }));
+
+      const deductionPieData = [];
+      let colorIndex = 0;
+      activeMonthData.deductions.forEach(d => {
+          const name = d.name.toLowerCase();
+          // Ігноруємо аванси та виплати на картку (залишаємо тільки податки та інші відрахування)
+          if (name.includes('аванс') || name.includes('виплат') || name.includes('перерахування') || name.includes('картк') || name.includes('банк') || name.includes('о/р')) {
+              return;
+          }
+          
+          let displayName = d.name;
+          if (name.includes('податок')) displayName = 'ПДФО';
+          else if (name.includes('військов') || name.includes('вз')) displayName = 'Військ. збір';
+          else if (name.includes('проф')) displayName = 'Профвнески';
+          else if (displayName.length > 15) displayName = displayName.substring(0, 15) + '...';
+          
+          const existing = deductionPieData.find(item => item.name === displayName);
+          if (existing) {
+              existing.value += Number(d.amount);
+          } else {
+              deductionPieData.push({ 
+                  name: displayName, 
+                  value: Number(d.amount),
+                  color: DEDUCTION_PALETTE[colorIndex % DEDUCTION_PALETTE.length]
+              });
+              colorIndex++;
+          }
+      });
+      // Сортуємо від більшого податку до меншого
+      deductionPieData.sort((a, b) => b.value - a.value);
+
+      const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+        if (percent < 0.05) return null;
+        const RADIAN = Math.PI / 180;
+        const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+        const x = cx + radius * Math.cos(-midAngle * RADIAN);
+        const y = cy + radius * Math.sin(-midAngle * RADIAN);
+        return <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize="11" fontWeight="bold">{`${(percent * 100).toFixed(0)}%`}</text>;
+      };
+
+      // --- Розрахунки Insights та YoY ---
+      const activeIndex = summaryData.findIndex(m => m.id === activeMonthData.id);
+      const prevMonthData = summaryData[activeIndex + 1];
+      const lastYearMonthData = summaryData.find(m => m.month === activeMonthData.month && m.year === activeMonthData.year - 1);
+      
+      let diffNode = null;
+      if (prevMonthData) {
+        const diff = activeMonthData.netPay - prevMonthData.netPay;
+        const percent = prevMonthData.netPay > 0 ? (diff / prevMonthData.netPay) * 100 : 0;
+        diffNode = (
+          <div className="mt-3 flex items-center justify-center md:justify-end gap-2 text-sm font-medium">
+            {diff > 0 && <span className="flex items-center text-emerald-500 bg-emerald-400/10 px-2.5 py-1 rounded-lg border border-emerald-400/20"><svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg><AnimatedNumber value={Math.abs(diff)} currency="UAH" /> <span className="ml-1.5 opacity-80 text-xs">({percent.toFixed(1)}%)</span></span>}
+            {diff < 0 && <span className="flex items-center text-rose-500 bg-rose-400/10 px-2.5 py-1 rounded-lg border border-rose-400/20"><svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg><AnimatedNumber value={Math.abs(diff)} currency="UAH" /><span className="ml-1.5 opacity-80 text-xs">({Math.abs(percent).toFixed(1)}%)</span></span>}
+            {diff === 0 && <span className="text-slate-400 bg-slate-400/10 px-2.5 py-1 rounded-lg border border-slate-400/20">Без змін</span>}
+            <span className="text-slate-500 text-xs ml-1 hidden sm:inline-block">до мин. міс.</span>
+          </div>
+        );
+      }
+
+      let yoyNode = null;
+      if (lastYearMonthData) {
+        const yoyDiff = activeMonthData.netPay - lastYearMonthData.netPay;
+        const yoyPercent = lastYearMonthData.netPay > 0 ? (yoyDiff / lastYearMonthData.netPay) * 100 : 0;
+        yoyNode = (
+          <div className="mt-2 text-xs font-medium flex items-center justify-center md:justify-end gap-1.5 opacity-90">
+             <span className="text-slate-400">YoY ({activeMonthData.monthName} {lastYearMonthData.year}):</span>
+             {yoyDiff > 0 && <span className="text-emerald-400 flex items-center">+{yoyPercent.toFixed(1)}% <svg className="w-3 h-3 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg></span>}
+             {yoyDiff < 0 && <span className="text-rose-400 flex items-center">{yoyPercent.toFixed(1)}% <svg className="w-3 h-3 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg></span>}
+             {yoyDiff === 0 && <span className="text-slate-400">Без змін</span>}
+          </div>
+        );
+      }
+
+      return (
+        <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-6 max-w-5xl mx-auto pb-12">
+          <div className="bg-white dark:bg-slate-800 p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-5 transition-colors">
+            <div className="flex items-center space-x-4">
+              <div className="bg-blue-600 p-3 rounded-xl text-white shadow-sm"><IconFileText /></div>
+              <div>
+                <h1 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-slate-100 flex flex-wrap items-center gap-2 md:gap-3">
+                  Розрахунковий лист
+                  {activeMonthData.hasVacation && <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800">ВІДПУСТКА</span>}
+                  <motion.button whileTap={{ scale: 0.95 }} onClick={() => startEditing(activeMonthData.id)} className="text-xs md:text-sm bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition-colors"><IconEdit /> Редагувати</motion.button>
+                </h1>
+                <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">Детальні нарахування</p>
+              </div>
+            </div>
+            <CustomSelect value={selectedMonthId} onChange={setSelectedMonthId} options={dbData.map(m => ({ value: m.id, label: `${m.monthName} ${m.year}` }))} icon={IconCalendar} />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-emerald-100 dark:border-emerald-900/30 flex flex-col transition-colors overflow-hidden">
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 px-5 md:px-6 py-4 border-b border-emerald-100 dark:border-emerald-900/30 flex justify-between items-center z-10 relative">
+                <h3 className="text-lg font-bold text-emerald-800 dark:text-emerald-400">Нараховано</h3>
+                <span className="text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40 px-3 py-1 md:px-4 md:py-1.5 rounded-full text-sm font-bold shadow-sm">
+                  <AnimatedNumber value={activeMonthData.totalAccrued} currency="UAH" />
+                </span>
+              </div>
+              <div className="flex-1 overflow-x-auto overflow-y-auto max-h-[400px] no-scrollbar relative">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-700 sticky top-0 z-20 backdrop-blur-sm shadow-[0_1px_2px_rgba(0,0,0,0.05)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
+                    <tr><th className="px-5 md:px-6 py-3 font-medium whitespace-nowrap">Вид оплати</th><th className="px-3 md:px-4 py-3 font-medium text-center whitespace-nowrap">Дні/Год</th><th className="px-5 md:px-6 py-3 font-medium text-right whitespace-nowrap">Сума</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
+                    {activeMonthData.accruals.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                        <td className="px-5 md:px-6 py-3 md:py-4"><div className="flex items-center flex-wrap gap-2"><span className="font-semibold text-slate-800 dark:text-slate-200">{item.name}</span>{item.percent && <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">{item.percent}</span>}</div></td>
+                        <td className="px-3 md:px-4 py-3 md:py-4 text-center text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap">{item.days} / {item.hours}</td>
+                        <td className="px-5 md:px-6 py-3 md:py-4 text-right font-bold text-slate-800 dark:text-slate-200 tabular-nums whitespace-nowrap"><PrivacyText text={formatCurrency(item.amount, 'UAH')} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-rose-100 dark:border-rose-900/30 flex flex-col transition-colors overflow-hidden">
+              <div className="bg-rose-50 dark:bg-rose-900/20 px-5 md:px-6 py-4 border-b border-rose-100 dark:border-rose-900/30 flex justify-between items-center z-10 relative">
+                <h3 className="text-lg font-bold text-rose-800 dark:text-rose-400">Утримано</h3>
+                <span className="text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-900/40 px-3 py-1 md:px-4 md:py-1.5 rounded-full text-sm font-bold shadow-sm">
+                  <AnimatedNumber value={activeMonthData.totalDeducted} currency="UAH" />
+                </span>
+              </div>
+              <div className="flex-1 overflow-x-auto overflow-y-auto max-h-[400px] no-scrollbar relative">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-700 sticky top-0 z-20 backdrop-blur-sm shadow-[0_1px_2px_rgba(0,0,0,0.05)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
+                    <tr><th className="px-5 md:px-6 py-3 font-medium whitespace-nowrap">Вид утримання</th><th className="px-5 md:px-6 py-3 font-medium text-right whitespace-nowrap">Сума</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
+                    {activeMonthData.deductions.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                        <td className="px-5 md:px-6 py-3 md:py-4"><div className="font-semibold text-slate-800 dark:text-slate-200">{item.name}</div></td>
+                        <td className="px-5 md:px-6 py-3 md:py-4 text-right font-bold text-slate-800 dark:text-slate-200 tabular-nums whitespace-nowrap"><PrivacyText text={formatCurrency(item.amount, 'UAH')} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* Pie Charts Section */}
+          <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+             <div>
+                <h3 className="text-center font-bold text-slate-700 dark:text-slate-300 mb-2">Структура Нарахувань</h3>
+                {accrualPieData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie data={accrualPieData} cx="50%" cy="50%" labelLine={false} label={renderCustomizedLabel} outerRadius={80} dataKey="value" stroke="none">
+                        {accrualPieData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
+                      </Pie>
+                      <RechartsTooltip content={<CustomPieTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : <div className="h-[200px] flex items-center justify-center text-slate-400 text-sm">Немає даних</div>}
+                <div className="flex flex-wrap justify-center gap-3 mt-2">
+                  {accrualPieData.map((entry) => (
+                    <div key={entry.name} className="flex items-center text-xs text-slate-600 dark:text-slate-400 font-medium"><div className="w-3 h-3 rounded-full mr-1.5" style={{backgroundColor: entry.color}}></div>{entry.name}</div>
+                  ))}
+                </div>
+             </div>
+             <div className="border-t border-slate-100 dark:border-slate-700 pt-6 md:pt-0 md:border-t-0 md:border-l md:pl-6">
+                <h3 className="text-center font-bold text-slate-700 dark:text-slate-300 mb-2">Структура Утримань</h3>
+                {deductionPieData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie data={deductionPieData} cx="50%" cy="50%" labelLine={false} label={renderCustomizedLabel} outerRadius={80} dataKey="value" stroke="none">
+                        {deductionPieData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
+                      </Pie>
+                      <RechartsTooltip content={<CustomPieTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : <div className="h-[200px] flex items-center justify-center text-slate-400 text-sm">Немає даних</div>}
+                <div className="flex flex-wrap justify-center gap-3 mt-2">
+                  {deductionPieData.map((entry) => (
+                    <div key={entry.name} className="flex items-center text-xs text-slate-600 dark:text-slate-400 font-medium"><div className="w-3 h-3 rounded-full mr-1.5" style={{backgroundColor: entry.color}}></div>{entry.name}</div>
+                  ))}
+                </div>
+             </div>
+          </div>
+
+          {/* Sticky Panel - Чистий дохід */}
+          <div className="bg-slate-800 text-white rounded-2xl shadow-2xl md:shadow-lg flex flex-col relative overflow-hidden border border-slate-700 sticky bottom-4 z-40 md:static mt-6 ring-4 ring-slate-900/10 md:ring-0">
+            <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white opacity-5 rounded-full blur-2xl pointer-events-none"></div>
+            
+            <div className="p-5 md:p-8 flex flex-col md:flex-row justify-between items-center relative z-10 gap-5">
+              <div className="text-center md:text-left w-full md:w-auto">
+                <div className="flex items-center justify-between md:justify-start gap-3 w-full">
+                  <h2 className="text-xl md:text-2xl font-bold text-slate-100">Чистий дохід</h2>
+                  <motion.button whileTap={{ scale: 0.95 }} onClick={() => setShowMath(!showMath)} className="text-xs bg-slate-700/50 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-600 transition-colors flex items-center gap-1.5 focus:outline-none" aria-expanded={showMath}>
+                    {showMath ? "Згорнути" : "Детальніше"}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: showMath ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </motion.button>
+                </div>
+                <p className="text-sm text-slate-400 mt-1 text-left hidden md:block">Зароблено після податків (включає аванс).</p>
+              </div>
+              <div className="bg-slate-900/50 px-6 py-4 rounded-xl border border-slate-700 w-full md:w-auto text-center flex flex-col justify-center shadow-inner">
+                <div className="text-3xl md:text-4xl font-black text-emerald-400 tracking-tight tabular-nums">
+                  <AnimatedNumber value={activeMonthData.netPay} currency="UAH" />
+                </div>
+                {diffNode}
+                {yoyNode}
+              </div>
+            </div>
+
+            <AnimatePresence>
+              {showMath && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-slate-900 border-t border-slate-700/50 overflow-hidden">
+                  <div className="p-5 md:p-8">
+                    <div className="max-w-2xl mx-auto md:mx-0 bg-slate-800/50 rounded-xl border border-slate-700/50 p-4 md:p-5 text-sm md:text-base">
+                      <div className="flex justify-between items-center pb-3 border-b border-slate-700/50">
+                        <div className="flex flex-col"><span className="text-slate-300 font-medium">Сумарні нарахування</span></div>
+                        <span className="text-emerald-400 font-bold tabular-nums">+<PrivacyText text={formatCurrency(activeMonthData.totalAccrued, 'UAH')} /></span>
+                      </div>
+                      <div className="flex justify-between items-center py-3 border-b border-slate-700/50">
+                        <div className="flex flex-col"><span className="text-slate-300 font-medium">Сумарні утримання</span><span className="text-xs text-slate-500">Податки, збори</span></div>
+                        <span className="text-rose-400 font-bold tabular-nums">-<PrivacyText text={formatCurrency(taxSum, 'UAH')} /></span>
+                      </div>
+                      <div className="flex justify-between items-center py-3 border-b border-slate-700/50">
+                        <div className="flex flex-col"><span className="text-slate-300 font-medium">Вже виплачено</span><span className="text-xs text-slate-500">Аванси</span></div>
+                        <span className="text-slate-300 font-bold tabular-nums"><PrivacyText text={formatCurrency(advanceSum, 'UAH')} /></span>
+                      </div>
+                      {activeMonthData.prevMonthVacationPayout > 0 && (
+                        <div className="flex justify-between items-center py-3 border-b border-slate-700/50">
+                          <div className="flex flex-col"><span className="text-slate-300 font-medium">Відпускні з минулого місяця</span><span className="text-xs text-slate-500">Плюсуються до поточного доходу</span></div>
+                          <span className="text-emerald-400 font-bold tabular-nums">+<PrivacyText text={formatCurrency(activeMonthData.prevMonthVacationPayout, 'UAH')} /></span>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center pt-3 pb-4">
+                        <div className="flex flex-col"><span className="text-slate-300 font-medium">До виплати</span><span className="text-xs text-slate-500">Залишок на карту</span></div>
+                        <span className="text-slate-300 font-bold tabular-nums"><PrivacyText text={formatCurrency(activeMonthData.toBank, 'UAH')} /></span>
+                      </div>
+                      <div className="flex justify-between items-center py-4 border-t border-slate-700/50 bg-slate-800/40 -mx-4 md:-mx-5 -mb-4 md:-mb-5 px-4 md:px-5 rounded-b-xl shadow-inner">
+                        <div className="flex flex-col"><span className="text-white font-bold text-lg">Чистий дохід</span></div>
+                        <span className="text-emerald-400 font-black text-xl tabular-nums"><PrivacyText text={formatCurrency(activeMonthData.netPay, 'UAH')} /></span>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </motion.div>
+      );
+    };
+
+    const AddPayslipView = () => {
+      const { dbData, setDbData, setSelectedMonthId, handleTabChange, showToast, setIsFormDirty, editingPayslip, setEditingPayslip } = useSalaryContext();
+      
+      const [monthIdx, setMonthIdx] = useState(0); const [year, setYear] = useState(''); const [pastedText, setPastedText] = useState('');
+      const [accruals, setAccruals] = useState([]); const [deductions, setDeductions] = useState([]);
+      const [overwriteConfirm, setOverwriteConfirm] = useState(null);
+
+      useEffect(() => {
+        if (editingPayslip) {
+          setMonthIdx(editingPayslip.month - 1); setYear(editingPayslip.year.toString());
+          setAccruals(editingPayslip.accruals.length ? editingPayslip.accruals.map(a => ({...a, id: generateId()})) : []);
+          setDeductions(editingPayslip.deductions.length ? editingPayslip.deductions.map(d => ({...d, id: generateId()})) : []);
+        } else {
+          const today = new Date(); setMonthIdx(today.getMonth()); setYear(today.getFullYear().toString());
+          setAccruals([{ id: generateId(), name: 'Посадовий оклад', percent: '', days: 21, hours: '168:0', amount: '' }]);
+          setDeductions([{ id: generateId(), name: 'Плановий аванс', amount: '' }, { id: generateId(), name: 'Профвнески', amount: '' }, { id: generateId(), name: 'Податок з доход. фіз.ос.', amount: '' }, { id: generateId(), name: 'Військовий збір', amount: '' }]);
+        }
+      }, [editingPayslip]);
+
+      const markDirty = () => setIsFormDirty(true);
+      const handleAddAccrual = () => { setAccruals([...accruals, { id: generateId(), name: '', percent: '', days: 0, hours: '0:0', amount: '' }]); markDirty(); };
+      const handleAddDeduction = () => { setDeductions([...deductions, { id: generateId(), name: '', amount: '' }]); markDirty(); };
+      const removeAccrual = (id) => { setAccruals(accruals.filter(a => a.id !== id)); markDirty(); };
+      const removeDeduction = (id) => { setDeductions(deductions.filter(d => d.id !== id)); markDirty(); };
+
+      const processParsedData = (text, isCsv) => {
+        const result = ParserModule.parseTextPayslip(text, isCsv);
+        if (result.success) {
+          if (result.accruals.length > 0) setAccruals(result.accruals); if (result.deductions.length > 0) setDeductions(result.deductions);
+          if (result.period) { setMonthIdx(result.period.monthIdx); setYear(result.period.year.toString()); }
+          setPastedText(''); markDirty(); showToast("Дані успішно розпізнано та перенесено!", "success");
+        } else { showToast("Не вдалося розпізнати дані. Перевірте формат.", "error"); }
+      };
+
+      const cleanDataList = (list) => list.filter(item => item.name.trim() !== '' && item.amount !== '' && !isNaN(Number(item.amount))).map(item => ({ ...item, amount: Number(item.amount) }));
+
+      const handleFormSubmit = (e) => {
+        e.preventDefault();
+        const monthId = `${year}-${String(monthIdx + 1).padStart(2, '0')}`; 
+        const cleanedAccruals = cleanDataList(accruals); const cleanedDeductions = cleanDataList(deductions);
+        if(cleanedAccruals.length === 0 && cleanedDeductions.length === 0) { showToast("Форма порожня або містить некоректні дані.", "error"); return; }
+
+        const newSlip = { id: monthId, month: monthIdx + 1, year: Number(year), monthName: MONTH_NAMES[monthIdx], accruals: cleanedAccruals, deductions: cleanedDeductions };
+        if (editingPayslip && editingPayslip.id === monthId) savePayslip(newSlip);
+        else if (dbData.some(d => d.id === monthId)) setOverwriteConfirm(newSlip);
+        else savePayslip(newSlip);
+      };
+
+      const savePayslip = (newSlip) => {
+        let updatedData = dbData.filter(d => d.id !== newSlip.id);
+        if (editingPayslip && editingPayslip.id !== newSlip.id) updatedData = updatedData.filter(d => d.id !== editingPayslip.id);
+        setDbData([...updatedData, newSlip]); setSelectedMonthId(newSlip.id);
+        confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#3b82f6', '#10b981', '#a855f7', '#f59e0b'] });
+        showToast(editingPayslip ? "Зміни успішно збережено!" : "Збережено локально. Не забудьте експортувати базу!", "success");
+        setIsFormDirty(false); setEditingPayslip(null); handleTabChange('payslips', true); setOverwriteConfirm(null);
+      };
+
+      return (
+        <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="max-w-4xl mx-auto space-y-6 pb-10">
+          <AnimatePresence>
+            {overwriteConfirm && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+                <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-3 text-amber-600 dark:text-amber-500 mb-4"><div className="bg-amber-100 dark:bg-amber-900/30 p-2 rounded-full"><IconAlert /></div><h3 className="text-xl font-bold">Оновлення даних</h3></div>
+                  <p className="text-slate-600 dark:text-slate-300 mb-6">Розрахунковий лист за <b>{overwriteConfirm.monthName} {overwriteConfirm.year}</b> вже існує. Бажаєте перезаписати старі дані?</p>
+                  <div className="flex justify-end gap-3">
+                    <button type="button" onClick={() => setOverwriteConfirm(null)} className="px-4 py-2 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">Скасувати</button>
+                    <button type="button" onClick={() => savePayslip(overwriteConfirm)} className="px-4 py-2 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 transition shadow-sm">Перезаписати</button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {!editingPayslip ? (
+            <div className="bg-white dark:bg-slate-800 p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors">
+              <div className="mb-4"><h2 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1">Імпорт даних</h2><p className="text-slate-500 dark:text-slate-400 text-xs md:text-sm">Вставте скопійований текст розрахункового листа</p></div>
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-4 md:p-5 rounded-xl border border-blue-100 dark:border-blue-800/50 transition-colors">
+                <div className="flex flex-col md:flex-row gap-3">
+                  <textarea value={pastedText} onChange={(e) => setPastedText(e.target.value)} placeholder="Вставте сюди текст розрахункового листа..." className="flex-1 h-20 md:h-24 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-700 text-slate-800 dark:text-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-colors" />
+                  <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={() => processParsedData(pastedText, false)} disabled={!pastedText.trim()} className="w-full md:w-32 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm">Розпізнати</motion.button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-slate-800 p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors">
+              <h2 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1 flex items-center gap-2"><IconEdit /> Редагування даних</h2><p className="text-slate-500 dark:text-slate-400 text-sm">Внесення змін до листа за {editingPayslip.monthName} {editingPayslip.year}</p>
+            </div>
+          )}
+
+          <form onSubmit={handleFormSubmit} className="space-y-6">
+            <div className="bg-white dark:bg-slate-800 p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Період</h3>
+              <div className="grid grid-cols-2 gap-4 md:gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Місяць</label>
+                  <select value={monthIdx} onChange={e => { setMonthIdx(Number(e.target.value)); markDirty(); }} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500 transition-colors text-sm md:text-base">
+                    {MONTH_NAMES.map((m, i) => <option key={i} value={i}>{m}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Рік</label>
+                  <input type="number" value={year} onChange={e => { setYear(e.target.value); markDirty(); }} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500 transition-colors text-sm md:text-base" required />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-800 p-3 md:p-6 rounded-2xl shadow-sm border border-emerald-200 dark:border-emerald-900/50 transition-colors">
+              <div className="flex justify-between items-center mb-4 px-2 md:px-0">
+                <h3 className="text-base md:text-lg font-bold text-emerald-800 dark:text-emerald-400">Нараховано</h3><button type="button" onClick={handleAddAccrual} className="flex items-center gap-1 text-sm font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-3 py-1.5 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition"><IconPlus /> Додати</button>
+              </div>
+              <div className="space-y-3">
+                <AnimatePresence>
+                  {accruals.map((item, idx) => (
+                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, height: 0, overflow: 'hidden' }} key={item.id} className="flex flex-col md:flex-row gap-2 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50 transition-colors">
+                      <input type="text" placeholder="Вид оплати" value={item.name} onChange={e => { const newArr = [...accruals]; newArr[idx].name = e.target.value; setAccruals(newArr); markDirty(); }} className="w-full md:flex-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-lg p-2.5 text-sm transition-colors" required />
+                      <div className="grid grid-cols-2 gap-2 md:flex md:w-auto">
+                        <input type="text" placeholder="% (напр. 100%)" value={item.percent || ''} onChange={e => { const newArr = [...accruals]; newArr[idx].percent = e.target.value; setAccruals(newArr); markDirty(); }} className="w-full md:w-24 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-lg p-2.5 text-sm transition-colors" />
+                        <input type="number" placeholder="Дні" value={item.days} onChange={e => { const newArr = [...accruals]; newArr[idx].days = e.target.value; setAccruals(newArr); markDirty(); }} className="w-full md:w-16 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-lg p-2.5 text-sm transition-colors" />
+                        <input type="text" placeholder="Год" value={item.hours} onChange={e => { const newArr = [...accruals]; newArr[idx].hours = e.target.value; setAccruals(newArr); markDirty(); }} className="w-full md:w-20 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-lg p-2.5 text-sm transition-colors" />
+                        <input type="number" step="0.01" placeholder="Сума ₴" value={item.amount} onChange={e => { const newArr = [...accruals]; newArr[idx].amount = e.target.value; setAccruals(newArr); markDirty(); }} className="w-full md:w-28 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-emerald-700 dark:text-emerald-400 rounded-lg p-2.5 text-sm font-bold transition-colors" required />
+                      </div>
+                      <button type="button" onClick={() => removeAccrual(item.id)} className="w-full md:w-auto p-2.5 flex justify-center text-rose-500 bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/20 dark:hover:bg-rose-900/40 rounded-lg transition mt-2 md:mt-0"><IconTrash /></button>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-800 p-3 md:p-6 rounded-2xl shadow-sm border border-rose-200 dark:border-slate-700 transition-colors">
+              <div className="flex justify-between items-center mb-4 px-2 md:px-0">
+                <h3 className="text-base md:text-lg font-bold text-rose-800 dark:text-rose-400">Утримано</h3><button type="button" onClick={handleAddDeduction} className="flex items-center gap-1 text-sm font-medium text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/30 px-3 py-1.5 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/50 transition"><IconPlus /> Додати</button>
+              </div>
+              <div className="space-y-3">
+                <AnimatePresence>
+                  {deductions.map((item, idx) => (
+                    <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, height: 0, overflow: 'hidden' }} key={item.id} className="flex flex-col md:flex-row gap-2 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50 transition-colors">
+                      <input type="text" placeholder="Вид утримання" value={item.name} onChange={e => { const newArr = [...deductions]; newArr[idx].name = e.target.value; setDeductions(newArr); markDirty(); }} className="w-full md:flex-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-lg p-2.5 text-sm transition-colors" required />
+                      <input type="number" step="0.01" placeholder="Сума ₴" value={item.amount} onChange={e => { const newArr = [...deductions]; newArr[idx].amount = e.target.value; setDeductions(newArr); markDirty(); }} className="w-full md:w-32 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-rose-700 dark:text-rose-400 rounded-lg p-2.5 text-sm font-bold transition-colors" required />
+                      <button type="button" onClick={() => removeDeduction(item.id)} className="w-full md:w-auto p-2.5 flex justify-center text-rose-500 bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/20 dark:hover:bg-rose-900/40 rounded-lg transition mt-2 md:mt-0"><IconTrash /></button>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            <div className="flex flex-col md:flex-row justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+              <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={() => { if(editingPayslip) setEditingPayslip(null); handleTabChange('dashboard'); }} className="w-full md:w-auto px-6 py-3 font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-transparent dark:border-slate-700 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition">Скасувати</motion.button>
+              <motion.button whileTap={{ scale: 0.95 }} type="submit" className="w-full md:w-auto px-8 py-3 font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-md flex items-center justify-center gap-2"><IconCheck /> Зберегти</motion.button>
+            </div>
+          </form>
+        </motion.div>
+      );
+    };
+
+    const Layout = () => {
+      const { theme, toggleTheme, isPrivateMode, togglePrivateMode, activeTab, handleTabChange, pendingTab, confirmTabChange, cancelTabChange, dbData, setDbData, generateAndDownloadJSONFile, showToast, hasUnexportedChanges, clearAllData, isMobileMenuOpen, setIsMobileMenuOpen } = useSalaryContext();
+      const [isRestoring, setIsRestoring] = useState(false); const [showClearConfirm, setShowClearConfirm] = useState(false); const [isDragging, setIsDragging] = useState(false); const backupInputRef = useRef(null);
+
+      const processImportedFile = (file) => {
+        setIsRestoring(true); const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const importedData = JSON.parse(event.target.result);
+            if (Array.isArray(importedData)) {
+              const migratedData = importedData.map(item => {
+                 if (item.id && item.id.includes('.')) { const mIdx = MONTH_NAMES.indexOf(item.monthName); const yearNum = item.year.toString().length === 2 ? `20${item.year}` : item.year; return { ...item, id: `${yearNum}-${String(mIdx + 1).padStart(2, '0')}`, month: mIdx + 1, year: Number(yearNum) }; }
+                 return item;
+              });
+              setDbData(migratedData); showToast("Дані успішно імпортовано!", "success"); handleTabChange('dashboard');
+            } else { showToast("Очікується масив даних.", "error"); }
+          } catch (err) { showToast("Помилка. Це не валідний .json", "error"); } finally { setIsRestoring(false); if (backupInputRef.current) backupInputRef.current.value = ''; }
+        };
+        reader.readAsText(file);
+      };
+
+      const handleImportBackup = (e) => { const file = e.target.files[0]; if (!file) return; processImportedFile(file); };
+      const handleDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
+      const handleDragLeave = (e) => { e.preventDefault(); if (!e.currentTarget.contains(e.relatedTarget)) setIsDragging(false); };
+      const handleDrop = (e) => { e.preventDefault(); setIsDragging(false); const file = e.dataTransfer.files?.[0]; if (file && file.name.endsWith('.json')) processImportedFile(file); else if (file) showToast("Будь ласка, завантажте файл .json", "error"); };
+
+      return (
+        <div className="h-screen flex flex-col md:flex-row bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-sans transition-colors duration-300 relative" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+          <AnimatePresence>
+            {isDragging && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-[100] bg-blue-600/90 backdrop-blur-sm flex flex-col items-center justify-center text-white border-8 border-blue-400 border-dashed m-4 rounded-3xl">
+                <div className="w-24 h-24 mb-6 animate-bounce text-white flex items-center justify-center [&>svg]:w-full [&>svg]:h-full"><IconDatabase /></div><h2 className="text-3xl md:text-4xl font-bold mb-3 text-center px-4">Відпустіть файл тут</h2><p className="text-base md:text-lg text-blue-100 text-center px-4">щоб імпортувати базу даних</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="md:hidden bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between z-30">
+            <div className="flex items-center space-x-2"><div className="bg-blue-600 p-1.5 rounded-lg text-white"><IconWallet /></div><h1 className="text-lg font-bold">SalaryHub</h1></div>
+            <div className="flex items-center gap-2"><button onClick={toggleTheme} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">{theme === 'dark' ? <IconSun /> : <IconMoon />}</button><button onClick={togglePrivateMode} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">{isPrivateMode ? <IconEyeOff /> : <IconEye />}</button><button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"><IconMenu /></button></div>
+          </div>
+
+          <AnimatePresence>
+            {pendingTab && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700"><div className="flex items-center gap-3 text-amber-600 dark:text-amber-500 mb-4"><div className="bg-amber-100 dark:bg-amber-900/30 p-2 rounded-full"><IconAlert /></div><h3 className="text-xl font-bold">Незбережені дані</h3></div><p className="text-slate-600 dark:text-slate-300 mb-6">Ви внесли зміни у форму. Якщо ви перейдете на іншу вкладку, незбережені дані будуть втрачені.</p><div className="flex justify-end gap-3 flex-wrap"><button onClick={cancelTabChange} className="px-4 py-2 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">Залишитися</button><button onClick={confirmTabChange} className="px-4 py-2 bg-rose-500 text-white font-bold rounded-xl hover:bg-rose-600 transition shadow-sm">Вийти</button></div></motion.div></motion.div>
+            )}
+            {showClearConfirm && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700"><div className="flex items-center gap-3 text-rose-600 dark:text-rose-500 mb-4"><div className="bg-rose-100 dark:bg-rose-900/30 p-2 rounded-full"><IconAlert /></div><h3 className="text-xl font-bold">Очистити всі дані?</h3></div><p className="text-slate-600 dark:text-slate-300 mb-6">Ви збираєтесь видалити <b>всі розрахункові листи</b> з бази. Цю дію неможливо скасувати.</p><div className="flex justify-end gap-3 flex-wrap"><button onClick={() => setShowClearConfirm(false)} className="px-4 py-2 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">Скасувати</button><button onClick={() => { clearAllData(); setShowClearConfirm(false); }} className="px-4 py-2 bg-rose-500 text-white font-bold rounded-xl hover:bg-rose-600 transition shadow-sm">Очистити</button></div></motion.div></motion.div>
+            )}
+          </AnimatePresence>
+
+          {isMobileMenuOpen && <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 md:hidden" onClick={() => setIsMobileMenuOpen(false)}></div>}
+
+          <aside className={`fixed inset-y-0 left-0 z-50 w-72 md:w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+            <div className="p-6 flex items-center justify-between md:mb-6">
+              <div className="flex items-center space-x-3 hidden md:flex"><div className="bg-blue-600 p-2 rounded-lg text-white"><IconWallet /></div><h1 className="text-xl font-bold text-slate-800 dark:text-slate-100">SalaryHub</h1></div>
+              <div className="md:hidden flex items-center w-full justify-between"><div className="flex items-center space-x-2"><div className="bg-blue-600 p-1.5 rounded-lg text-white"><IconWallet /></div><span className="font-bold text-lg">Меню</span></div><button onClick={() => setIsMobileMenuOpen(false)} className="p-2 bg-slate-100 dark:bg-slate-700 rounded-full"><IconX /></button></div>
+              <button onClick={toggleTheme} className="hidden md:block p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-50 dark:bg-slate-700/50 rounded-lg transition-colors">{theme === 'dark' ? <IconSun /> : <IconMoon />}</button>
+              <button onClick={togglePrivateMode} className="hidden md:block ml-2 p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-50 dark:bg-slate-700/50 rounded-lg transition-colors">{isPrivateMode ? <IconEyeOff /> : <IconEye />}</button>
+            </div>
+            
+            <nav className="space-y-2 flex-1 flex flex-col px-4 md:px-6 overflow-y-auto no-scrollbar">
+              <div className="space-y-2">
+                <motion.button whileTap={{ scale: 0.95 }} onClick={() => handleTabChange('dashboard')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'dashboard' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}><IconActivity /><span>Головна</span></motion.button>
+                <motion.button whileTap={{ scale: 0.95 }} onClick={() => { if (dbData.length > 0) handleTabChange('payslips'); }} disabled={dbData.length === 0} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'payslips' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed'}`}><IconFileText /><span>Розрахункові листи</span></motion.button>
+                <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-700"><motion.button whileTap={{ scale: 0.95 }} onClick={() => handleTabChange('add')} className={`w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'add' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 dark:bg-slate-900/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/80'}`}><IconPlus /><span>Додати дані</span></motion.button></div>
+              </div>
+              <div className="mt-auto pt-8 pb-6">
+                <div className="text-xs font-semibold text-slate-400 dark:text-slate-500 mb-3 px-2 uppercase tracking-wider">Файли та Дані</div>
+                <button onClick={() => generateAndDownloadJSONFile(dbData)} disabled={dbData.length === 0} className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${hasUnexportedChanges ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed'}`}>
+                  <div className="flex items-center gap-3"><IconDownload /> Експорт .json</div>
+                  {hasUnexportedChanges && <span className="flex h-2.5 w-2.5 relative"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span></span>}
+                </button>
+                <label className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer mt-1 ${isRestoring ? 'text-blue-400 bg-blue-50 dark:bg-blue-900/30' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>
+                  {isRestoring ? <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div> : <IconDatabase />} {isRestoring ? 'Імпорт...' : 'Імпорт .json'}
+                  <input type="file" accept=".json" className="hidden" onChange={handleImportBackup} ref={backupInputRef} disabled={isRestoring} />
+                </label>
+                <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+                  <button onClick={() => setShowClearConfirm(true)} disabled={dbData.length === 0} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"><IconTrash /> Очистити базу</button>
+                </div>
+              </div>
+            </nav>
+          </aside>
+
+          <main className="flex-1 p-4 md:p-8 overflow-y-auto no-scrollbar relative">
+            <AnimatePresence mode="wait">
+              {activeTab === 'dashboard' && <DashboardView key="dashboard" />}
+              {activeTab === 'payslips' && <PayslipView key="payslips" />}
+              {activeTab === 'add' && <AddPayslipView key="add" />}
+            </AnimatePresence>
+          </main>
+        </div>
+      );
+    };
+
+    const App = () => { return <SalaryProvider><Layout /></SalaryProvider>; }
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
