@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>SalaryHub - Розрахункові листи</title>
+  <title>SalaryHub - Розрахункові листи (з підтримкою Excel)</title>
   
   <!-- Завантаження Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -14,7 +14,6 @@
         extend: {
           fontFamily: {
             sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
-            // ДОДАНО: Моноширинний шрифт для цифр
             mono: ['"JetBrains Mono"', 'monospace'], 
           }
         }
@@ -28,13 +27,14 @@
   <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
-  <!-- Завантаження Framer Motion & Recharts & Confetti -->
+  <!-- Завантаження Framer Motion, Recharts, Confetti та XLSX (SheetJS) -->
   <script src="https://unpkg.com/framer-motion@11.0.8/dist/framer-motion.js"></script>
   <script src="https://unpkg.com/recharts@2.12.3/umd/Recharts.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <!-- ДОДАНО: Бібліотека для парсингу Excel файлів локально -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <style>
-    /* ДОДАНО: JetBrains Mono для преміального банківського вигляду цифр */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700;800&display=swap');
     
     body { font-family: 'Inter', sans-serif; transition: background-color 0.3s, color 0.3s; }
@@ -47,7 +47,6 @@
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     
-    /* Згладжування для моноширинного шрифту */
     .font-mono { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
   </style>
 </head>
@@ -62,6 +61,8 @@
     const IconWallet = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>;
     const IconCalendar = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
     const IconFileText = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg>;
+    // ДОДАНО: Іконка Excel
+    const IconExcel = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2l2 3 2-3h2l-3 4 3 4h-2l-2-3-2 3H8l3-4-3-4z"/></svg>;
     const IconMoneyStack = () => <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 2h16"/><path d="M3 5h18"/><rect x="2" y="8" width="20" height="12" rx="2"/><circle cx="12" cy="14" r="2"/><path d="M6 14h.01"/><path d="M18 14h.01"/></svg>;
     const IconActivity = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>;
     const IconPlus = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>;
@@ -83,7 +84,6 @@
 
     const MONTH_NAMES = ["Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень", "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень"];
 
-    // ПОКРАЩЕННЯ: Більш надійний генератор ID для уникнення колізій при швидких кліках
     let idCounter = 0;
     const generateId = () => {
       if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -225,40 +225,110 @@
     };
 
     const ParserModule = {
-      accrualKeywords: ['оклад', 'премі', 'відпустк', 'лікарнян', 'доплат', 'надбавк', 'надб', 'компенсаці', 'індексаці', 'оплат', 'допомог', 'відрядж', 'мобілізован', 'матеріал'],
-      deductionKeywords: ['аванс', 'податок', 'збір', 'внеск', 'виплачено', 'виплат', 'утриманн', 'перерахуванн', 'картк', 'банк', 'проф', 'алімент', 'борг', 'зсу', 'благодійн', 'виконавч', 'о/р'],
-      parseAmount: (str) => { if (!str || str.includes(':')) return 0; const cleanStr = str.replace(/(^"|"$)/g, '').replace(/\s/g, '').replace(',', '.'); if (/^(19|20)\d{4}$/.test(cleanStr) || /^(0[1-9]|1[0-2])(19|20)\d{2}$/.test(cleanStr)) return 0; const val = parseFloat(cleanStr); return isNaN(val) ? 0 : Math.abs(val); },
-      splitCSVLine: (str, separator) => { const result = []; let current = '', inQuotes = false; for (let i = 0; i < str.length; i++) { const char = str[i]; if (char === '"') inQuotes = !inQuotes; else if (char === separator && !inQuotes) { result.push(current); current = ''; } else current += char; } result.push(current); return result; },
-      detectPeriod: (lines) => { for (const line of lines) { const match = line.match(/за\s*(\d{1,2})\.(\d{4})/i); if (match) return { monthIdx: parseInt(match[1], 10) - 1, year: parseInt(match[2], 10) }; } return null; },
-      extractAmountFromText: (text) => { const words = text.replace(/-/g, ' ').trim().split(/\s+/); const buildNumStr = (index) => { let possibleNumStr = words[index]; let k = index - 1; while (k >= 0 && /^\d+$/.test(words[k])) { possibleNumStr = words[k] + possibleNumStr; k--; } return possibleNumStr; }; for(let i = words.length - 1; i >= 0; i--) { if (words[i].includes(':')) break; if (/^[\d,.]+$/.test(words[i]) && (words[i].includes(',') || words[i].includes('.'))) { const val = ParserModule.parseAmount(buildNumStr(i)); if (val > 0) return val; } } for(let i = words.length - 1; i >= 0; i--) { if (words[i].includes(':')) break; if (/^[\d]+$/.test(words[i])) { const possibleNumStr = buildNumStr(i); const val = ParserModule.parseAmount(possibleNumStr); if (val > 0 && !/^(19|20)\d{4}$/.test(possibleNumStr) && !/^(0[1-9]|1[0-2])(19|20)\d{2}$/.test(possibleNumStr)) { if (possibleNumStr.length <= 3 && i >= words.length - 2) continue; return val; } } } return 0; },
-      extractItems: (cols) => {
-        const isAccrualCol = (c) => { const lower = c.toLowerCase(); if (lower.includes('зсу') || lower.includes('благодійн') || lower.includes('виплат') || lower.includes('утриман')) return false; return ParserModule.accrualKeywords.some(kw => lower.includes(kw)); };
-        const isDeductionCol = (c) => { const lower = c.toLowerCase(); return ParserModule.deductionKeywords.some(kw => lower.includes(kw)) && !lower.includes('разом'); };
-        let accrual = null, deduction = null; const accIdx = cols.findIndex(isAccrualCol); const dedIdx = cols.findIndex(isDeductionCol);
-        if (accIdx !== -1) {
-          const accEndIdx = (dedIdx !== -1 && dedIdx > accIdx) ? dedIdx : cols.length; let amount = ParserModule.extractAmountFromText(cols.slice(accIdx, accEndIdx).join(' '));
-          if (amount > 0) {
-            let days = parseInt(cols[accIdx + 1]) || 0; let hoursStr = cols[accIdx + 2] || '0:0';
-            if (amount === ParserModule.parseAmount(cols[accIdx + 1])) { days = 0; hoursStr = '0:0'; } else if (amount === ParserModule.parseAmount(cols[accIdx + 2])) { hoursStr = '0:0'; }
-            let name = cols[accIdx].replace(/\s*-\s*[\d\s\.,]+$/, '').trim(); if (name.toLowerCase().includes('надб') && name.toLowerCase().includes('стаж') && name.toLowerCase().includes('енерг')) { name = 'Надбавка за стаж в енергетиці'; }
-            accrual = { id: generateId(), name, percent: '', days, hours: hoursStr, amount };
+      accrualKeywords: ['оклад', 'премі', 'відпустк', 'лікарнян', 'доплат', 'надбавк', 'надб', 'компенсаці', 'індексаці', 'оплат', 'допомог', 'відрядж', 'мобілізован', 'матеріал', 'інші'],
+      deductionKeywords: ['аванс', 'податок', 'збір', 'внеск', 'виплачено', 'виплат', 'утриманн', 'перерахуванн', 'картк', 'банк', 'проф', 'алімент', 'борг', 'зсу', 'благодійн', 'виконавч', 'о/р', 'вз'],
+      
+      isAmount: (val) => {
+        if (val == null || val === '') return false;
+        const str = String(val).replace(/[\s\u00A0]+/g, '').replace(',', '.');
+        if (/^-?\d+(\.\d+)?$/.test(str)) {
+          const num = Math.abs(parseFloat(str));
+          if (/^(19|20)\d{4}$/.test(str.replace('-', ''))) return false; // Ігноруємо дати формату YYYYMM
+          return num > 0;
+        }
+        return false;
+      },
+
+      parseNum: (val) => {
+        const str = String(val).replace(/[\s\u00A0]+/g, '').replace(',', '.');
+        return Math.abs(parseFloat(str)) || 0;
+      },
+
+      parseGrid: (rows) => {
+        const accruals = [];
+        const deductions = [];
+        let period = null;
+
+        const isAccrual = (c) => { 
+          const lower = String(c).toLowerCase(); 
+          if (lower.match(/зсу|благодійн|виплат|утриман|дохід|разом/)) return false; 
+          return ParserModule.accrualKeywords.some(kw => lower.includes(kw)); 
+        };
+        
+        const isDeduction = (c) => { 
+          const lower = String(c).toLowerCase(); 
+          return ParserModule.deductionKeywords.some(kw => lower.includes(kw)) && !lower.includes('разом'); 
+        };
+
+        // Шукаємо період
+        for (const row of rows) {
+          for (const cell of row) {
+            if (typeof cell === 'string') {
+              const match = cell.match(/за\s*(\d{1,2})\.(\d{4})/i) || cell.match(/(\d{1,2})\.(\d{4})\s*р/i); 
+              if (match) period = { monthIdx: parseInt(match[1], 10) - 1, year: parseInt(match[2], 10) };
+            }
           }
         }
-        if (dedIdx !== -1) {
-          let amount = ParserModule.extractAmountFromText(cols.slice(dedIdx).join(' '));
-          if (amount > 0) { let name = cols[dedIdx].replace(/\s*-\s*[\d\s\.,]+$/, '').trim(); deduction = { id: generateId(), name, amount }; }
-        }
-        return { accrual, deduction };
-      },
-      parseTextPayslip: (text, isCsv) => {
-        const cleanText = text.replace(/(={2,}|-{2,}|\*{2,}|\|)/g, ' ');
-        const lines = cleanText.split('\n'); const separator = isCsv ? (cleanText.includes(';') ? ';' : (cleanText.includes('\t') ? '\t' : ',')) : null;
-        const accruals = []; const deductions = []; const period = ParserModule.detectPeriod(lines);
-        lines.forEach(line => {
-          const cols = isCsv ? ParserModule.splitCSVLine(line, separator).map(c => c.trim().replace(/(^"|"$)/g, '')) : (line.includes('\t') ? line.split('\t').map(c => c.trim()) : line.split(/\s{2,}/).map(c => c.trim()));
-          const extracted = ParserModule.extractItems(cols); if (extracted.accrual) accruals.push(extracted.accrual); if (extracted.deduction) deductions.push(extracted.deduction);
+
+        // Обробка рядків
+        rows.forEach(row => {
+          if (!Array.isArray(row)) return;
+          const cleanRow = row.map(c => typeof c === 'string' ? c.trim() : c).filter(c => c != null && c !== '');
+          if (cleanRow.length === 0) return;
+
+          let accIdx = cleanRow.findIndex(c => typeof c === 'string' && isAccrual(c));
+          let dedIdx = cleanRow.findIndex(c => typeof c === 'string' && isDeduction(c));
+
+          if (accIdx !== -1) {
+            let endLimit = (dedIdx !== -1 && dedIdx > accIdx) ? dedIdx : cleanRow.length;
+            let slice = cleanRow.slice(accIdx + 1, endLimit);
+            
+            let amount = 0; let days = 0; let hours = '0:0';
+            
+            let hourCell = slice.find(c => typeof c === 'string' && c.includes(':'));
+            if (hourCell) hours = String(hourCell).trim();
+
+            let numberCandidates = slice.filter(ParserModule.isAmount).map(ParserModule.parseNum);
+            if (numberCandidates.length > 0) {
+              amount = Math.max(...numberCandidates); // Сума - зазвичай найбільше число
+              if (numberCandidates.length > 1) {
+                let smallest = Math.min(...numberCandidates);
+                if (smallest <= 31 && smallest === Math.floor(smallest)) days = smallest; // Днi - найменше ціле число до 31
+              }
+            }
+
+            if (amount > 0) {
+              let name = String(cleanRow[accIdx]).replace(/^\d+[\.\s]*/, '').trim(); // Прибираємо ID, напр: "1 Посадовий" -> "Посадовий"
+              if (name.toLowerCase().includes('надб') && name.toLowerCase().includes('стаж')) name = 'Надбавка за стаж в енергетиці';
+              accruals.push({ id: generateId(), name, percent: '', days, hours, amount });
+            }
+          }
+
+          if (dedIdx !== -1) {
+            let slice = cleanRow.slice(dedIdx + 1);
+            let amount = 0;
+            
+            let numberCandidates = slice.filter(ParserModule.isAmount).map(ParserModule.parseNum);
+            if (numberCandidates.length > 0) amount = Math.max(...numberCandidates);
+
+            if (amount > 0) {
+              let name = String(cleanRow[dedIdx]).replace(/^\d+[\.\s]*/, '').trim();
+              deductions.push({ id: generateId(), name, amount });
+            }
+          }
         });
+
         return { success: accruals.length > 0 || deductions.length > 0, accruals, deductions, period };
+      },
+
+      parseTextPayslip: (text) => {
+        const lines = text.replace(/(={2,}|-{2,}|\*{2,}|\|)/g, ' ').split('\n');
+        const rows = lines.map(line => {
+          if (line.includes('\t')) return line.split('\t');
+          // Розбиваємо текст на "колонки" за двома пробілами або крапкою з комою
+          return line.split(/\s{2,}|;/);
+        });
+        return ParserModule.parseGrid(rows);
       }
     };
 
@@ -546,7 +616,6 @@
         const node = nodeRef.current;
         if (!node) return;
 
-        // Плавна анімація прокрутки чисел
         const controls = animate(prevValue.current, value, {
           duration: 0.8,
           ease: "easeOut",
@@ -596,7 +665,6 @@
           </motion.div>
           <AnimatePresence>
             {isOpen && (
-              // ДОДАНО: Скляний морфізм (Glassmorphism) для випадаючого списку
               <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.15 }} className={`absolute top-full left-0 md:left-auto md:right-0 mt-2 bg-white/90 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200/50 dark:border-slate-700/50 rounded-xl shadow-2xl z-50 overflow-hidden ${dropdownClass}`}>
                 <div className="max-h-64 overflow-y-auto">
                   {options.map(opt => (
@@ -634,7 +702,6 @@
       if (active && payload && payload.length) {
         const pointData = payload[0].payload;
         return (
-          // ДОДАНО: Скляний морфізм для тултипів графіка
           <div className="bg-slate-900/80 dark:bg-slate-900/70 backdrop-blur-md text-white text-xs py-3 px-4 rounded-xl shadow-2xl flex flex-col gap-1.5 border border-white/10 dark:border-slate-600/50 min-w-[150px]">
             <div className="font-semibold text-slate-300 mb-1 border-b border-white/10 dark:border-slate-700/50 pb-1.5 flex justify-between items-center">
               <span>{pointData.monthName} {pointData.year}</span>
@@ -706,14 +773,12 @@
       const tickFill = theme === 'dark' ? '#94a3b8' : '#64748b';
       const tooltipCursor = theme === 'dark' ? '#475569' : '#cbd5e1';
 
-      // --- ДОДАНО: Визначаємо старти років для вертикальних ліній ---
       const yearMarkers = React.useMemo(() => {
         if (!showYearInLabels) return [];
         const markers = [];
         let currentYear = null;
         chartData.forEach((d, index) => {
           if (d.year !== currentYear) {
-            // Не малюємо лінію на найпершій точці графіка, щоб уникнути накладання на вісь Y
             if (index > 0) markers.push({ id: d.id, year: d.year });
             currentYear = d.year;
           }
@@ -758,23 +823,21 @@
             color = theme === 'dark' ? '#6ee7b7' : '#059669';
         }
 
-        let yPos = y - 12;
+        // Збільшено відступи, щоб цифри не залазили на графік
+        let yPos = y - 22; 
         if (index > 0 && index < chartData.length - 1) {
              const prev = chartData[index - 1][dataKey] || 0;
              const next = chartData[index + 1][dataKey] || 0;
-             if (value <= prev && value <= next) yPos = y + 20; 
+             if (value <= prev && value <= next) yPos = y + 28; 
         }
 
-        // ДОДАНО: Тло для міток, щоб гарантувати читабельність поверх інших ліній
         const bgColor = theme === 'dark' ? '#1e293b' : '#ffffff';
 
         return (
             <g style={{ filter: theme === 'dark' ? 'drop-shadow(0px 2px 2px rgba(0,0,0,0.5))' : 'none', pointerEvents: 'none' }}>
-               {/* Напівпрозоре тло під текстом (імітація stroke) */}
                <text x={x} y={yPos} fill={bgColor} fontSize={11} fontWeight={800} fontFamily="JetBrains Mono, monospace" textAnchor="middle" stroke={bgColor} strokeWidth={3} strokeLinejoin="round">
                    {displayValue}
                </text>
-               {/* Сам текст мітки */}
                <text x={x} y={yPos} fill={color} fontSize={11} fontWeight={700} fontFamily="JetBrains Mono, monospace" textAnchor="middle">
                    {displayValue}
                </text>
@@ -794,7 +857,6 @@
         const ticks = []; for (let i = start; i <= end + (step / 10); i += step) ticks.push(Math.round(i * 100) / 100); return ticks;
       };
 
-      // --- ДОДАНО: Функція рендеру ліній розділення років ---
       const renderYearMarkers = (yAxisId) => yearMarkers.map(m => (
         <ReferenceLine 
           key={`ref-${m.id}`} 
@@ -819,7 +881,7 @@
         let bonusTicks = getTicks('bonusPercentNumeric', 4, true); if (bonusTicks[bonusTicks.length - 1] < 100) bonusTicks = [0, 25, 50, 75, 100];
         return (
           <div style={{ width: '100%', height: 320, cursor: 'pointer' }}>
-            <ResponsiveContainer><LineChart onClick={handleChartClick} data={chartData} margin={{ top: 40, right: 15, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} /><XAxis dataKey="id" padding={{ left: 20, right: 20 }} tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} /><YAxis dataKey="bonusPercentNumeric" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : `${val}%`} domain={[bonusTicks[0], bonusTicks[bonusTicks.length - 1]]} ticks={bonusTicks} width={45} /><RechartsTooltip content={<CustomRechartsTooltip mode="bonus" currencySymbol={currencySymbol} />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} />{renderYearMarkers()}<Line type="monotone" dataKey="bonusPercentNumeric" name="Премія (%)" stroke="#a855f7" strokeWidth={3} dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#a855f7', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#a855f7', strokeWidth: 0 }} isAnimationActive={true}><LabelList dataKey="bonusPercentNumeric" content={(props) => <CustomChartLabel {...props} dataKey="bonusPercentNumeric" />}/></Line></LineChart></ResponsiveContainer>
+            <ResponsiveContainer><LineChart onClick={handleChartClick} data={chartData} margin={{ top: 55, right: 15, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} /><XAxis dataKey="id" padding={{ left: 20, right: 20 }} tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} /><YAxis dataKey="bonusPercentNumeric" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : `${val}%`} domain={[bonusTicks[0], bonusTicks[bonusTicks.length - 1]]} ticks={bonusTicks} width={45} /><RechartsTooltip content={<CustomRechartsTooltip mode="bonus" currencySymbol={currencySymbol} />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} />{renderYearMarkers()}<Line type="monotone" dataKey="bonusPercentNumeric" name="Премія (%)" stroke="#a855f7" strokeWidth={3} dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#a855f7', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#a855f7', strokeWidth: 0 }} isAnimationActive={true}><LabelList dataKey="bonusPercentNumeric" content={(props) => <CustomChartLabel {...props} dataKey="bonusPercentNumeric" />}/></Line></LineChart></ResponsiveContainer>
           </div>
         );
       }
@@ -827,7 +889,7 @@
         const uahTicks = getTicks('hourlyRate', 4); const foreignTicks = getTicks('hourlyRateForeign', 4);
         return (
           <div style={{ width: '100%', height: 320, cursor: 'pointer' }}>
-            <ResponsiveContainer><LineChart onClick={handleChartClick} data={chartData} margin={{ top: 40, right: 0, left: 5, bottom: 0 }}><defs><linearGradient id="colorHourly" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#06b6d4" stopOpacity={1}/><stop offset="100%" stopColor="#3b82f6" stopOpacity={1}/></linearGradient></defs><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} /><XAxis dataKey="id" padding={{ left: 20, right: 20 }} tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} /><YAxis yAxisId="left" dataKey="hourlyRate" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : formatCurrency(val)} domain={[uahTicks[0], uahTicks[uahTicks.length - 1]]} ticks={uahTicks} width={85} /><YAxis yAxisId="right" orientation="right" dataKey="hourlyRateForeign" axisLine={false} tickLine={false} tick={{ fill: tickFill, opacity: 0.7, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : `${val} ${currencySymbol}`} domain={[foreignTicks[0], foreignTicks[foreignTicks.length - 1]]} ticks={foreignTicks} width={75} /><RechartsTooltip content={<CustomRechartsTooltip mode="hourly" currencySymbol={currencySymbol} />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} />{renderYearMarkers('left')}<Line yAxisId="left" type="monotone" dataKey="hourlyRate" name="Гривні/год (₴)" stroke="url(#colorHourly)" strokeWidth={3} dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#06b6d4', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#06b6d4', strokeWidth: 0 }} isAnimationActive={true}><LabelList dataKey="hourlyRate" content={(props) => <CustomChartLabel {...props} dataKey="hourlyRate" />}/></Line><Line yAxisId="right" type="monotone" dataKey="hourlyRateForeign" name={`USD/год (${currencySymbol})`} stroke={tickFill} strokeWidth={1.5} strokeDasharray="6 6" dot={{ r: 2, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: tickFill }} activeDot={{ r: 4, fill: tickFill, strokeWidth: 0 }} isAnimationActive={true} /></LineChart></ResponsiveContainer>
+            <ResponsiveContainer><LineChart onClick={handleChartClick} data={chartData} margin={{ top: 55, right: 0, left: 5, bottom: 0 }}><defs><linearGradient id="colorHourly" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#06b6d4" stopOpacity={1}/><stop offset="100%" stopColor="#3b82f6" stopOpacity={1}/></linearGradient></defs><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} /><XAxis dataKey="id" padding={{ left: 20, right: 20 }} tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} /><YAxis yAxisId="left" dataKey="hourlyRate" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : formatCurrency(val)} domain={[uahTicks[0], uahTicks[uahTicks.length - 1]]} ticks={uahTicks} width={85} /><YAxis yAxisId="right" orientation="right" dataKey="hourlyRateForeign" axisLine={false} tickLine={false} tick={{ fill: tickFill, opacity: 0.7, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : `${val} ${currencySymbol}`} domain={[foreignTicks[0], foreignTicks[foreignTicks.length - 1]]} ticks={foreignTicks} width={75} /><RechartsTooltip content={<CustomRechartsTooltip mode="hourly" currencySymbol={currencySymbol} />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} />{renderYearMarkers('left')}<Line yAxisId="left" type="monotone" dataKey="hourlyRate" name="Гривні/год (₴)" stroke="url(#colorHourly)" strokeWidth={3} dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#06b6d4', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#06b6d4', strokeWidth: 0 }} isAnimationActive={true}><LabelList dataKey="hourlyRate" content={(props) => <CustomChartLabel {...props} dataKey="hourlyRate" />}/></Line><Line yAxisId="right" type="monotone" dataKey="hourlyRateForeign" name={`USD/год (${currencySymbol})`} stroke={tickFill} strokeWidth={1.5} strokeDasharray="6 6" dot={{ r: 2, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: tickFill }} activeDot={{ r: 4, fill: tickFill, strokeWidth: 0 }} isAnimationActive={true} /></LineChart></ResponsiveContainer>
           </div>
         );
       }
@@ -835,7 +897,7 @@
       const uahTicks = getTicks('netPay', 4); const foreignTicks = getTicks('foreignEquivalent', 4);
       return (
         <div style={{ width: '100%', height: 320, cursor: 'pointer' }}>
-          <ResponsiveContainer><LineChart onClick={handleChartClick} data={chartData} margin={{ top: 40, right: 0, left: 5, bottom: 0 }}><defs><linearGradient id="colorUah" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={1}/><stop offset="50%" stopColor="#f59e0b" stopOpacity={1}/><stop offset="100%" stopColor="#ef4444" stopOpacity={1}/></linearGradient></defs><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} /><XAxis dataKey="id" padding={{ left: 20, right: 20 }} tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} /><YAxis yAxisId="left" dataKey="netPay" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : formatCurrency(val)} domain={[uahTicks[0], uahTicks[uahTicks.length - 1]]} ticks={uahTicks} width={85} /><YAxis yAxisId="right" orientation="right" dataKey="foreignEquivalent" axisLine={false} tickLine={false} tick={{ fill: tickFill, opacity: 0.7, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : `${val} ${currencySymbol}`} domain={[foreignTicks[0], foreignTicks[foreignTicks.length - 1]]} ticks={foreignTicks} width={75} /><RechartsTooltip content={<CustomRechartsTooltip mode="income" currencySymbol={currencySymbol} />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} />{renderYearMarkers('left')}<Line yAxisId="left" type="monotone" dataKey="netPay" name="В гривнях (₴)" stroke="url(#colorUah)" strokeWidth={3} dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#10b981', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#10b981', strokeWidth: 0 }} isAnimationActive={true}><LabelList dataKey="netPay" content={(props) => <CustomChartLabel {...props} dataKey="netPay" />}/></Line><Line yAxisId="right" type="monotone" dataKey="foreignEquivalent" name={`USD (${currencySymbol})`} stroke={tickFill} strokeWidth={1.5} strokeDasharray="6 6" dot={{ r: 2, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: tickFill }} activeDot={{ r: 4, fill: tickFill, strokeWidth: 0 }} isAnimationActive={true} /></LineChart></ResponsiveContainer>
+          <ResponsiveContainer><LineChart onClick={handleChartClick} data={chartData} margin={{ top: 55, right: 0, left: 5, bottom: 0 }}><defs><linearGradient id="colorUah" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={1}/><stop offset="50%" stopColor="#f59e0b" stopOpacity={1}/><stop offset="100%" stopColor="#ef4444" stopOpacity={1}/></linearGradient></defs><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} /><XAxis dataKey="id" padding={{ left: 20, right: 20 }} tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} /><YAxis yAxisId="left" dataKey="netPay" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : formatCurrency(val)} domain={[uahTicks[0], uahTicks[uahTicks.length - 1]]} ticks={uahTicks} width={85} /><YAxis yAxisId="right" orientation="right" dataKey="foreignEquivalent" axisLine={false} tickLine={false} tick={{ fill: tickFill, opacity: 0.7, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : `${val} ${currencySymbol}`} domain={[foreignTicks[0], foreignTicks[foreignTicks.length - 1]]} ticks={foreignTicks} width={75} /><RechartsTooltip content={<CustomRechartsTooltip mode="income" currencySymbol={currencySymbol} />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} />{renderYearMarkers('left')}<Line yAxisId="left" type="monotone" dataKey="netPay" name="В гривнях (₴)" stroke="url(#colorUah)" strokeWidth={3} dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#10b981', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#10b981', strokeWidth: 0 }} isAnimationActive={true}><LabelList dataKey="netPay" content={(props) => <CustomChartLabel {...props} dataKey="netPay" />}/></Line><Line yAxisId="right" type="monotone" dataKey="foreignEquivalent" name={`USD (${currencySymbol})`} stroke={tickFill} strokeWidth={1.5} strokeDasharray="6 6" dot={{ r: 2, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: tickFill }} activeDot={{ r: 4, fill: tickFill, strokeWidth: 0 }} isAnimationActive={true} /></LineChart></ResponsiveContainer>
         </div>
       );
     });
@@ -847,7 +909,6 @@
       
       const currencySymbol = '$';
 
-      // ДОДАНО: Стан для віртуального скролу таблиці
       const [scrollTop, setScrollTop] = useState(0);
 
       const { dashboardData, avgEarnedUAH, avgEarnedForeign, minNetPay, maxNetPay, availableYears } = useMemo(() => {
@@ -887,6 +948,62 @@
         return { best, worst };
       }, [seasonalityData]);
 
+      const currentMonthShortName = MONTH_NAMES[new Date().getMonth()].slice(0, 3);
+      
+      const CustomPolarAngleAxis = (props) => {
+        const { payload, x, y, cx, cy } = props;
+        
+        // Відсуваємо текст по радіусу далі від центру
+        const offset = 18;
+        const angle = Math.atan2(y - cy, x - cx);
+        const newX = x + Math.cos(angle) * offset;
+        const newY = y + Math.sin(angle) * offset;
+
+        const isCurrentMonth = payload.value === currentMonthShortName;
+        
+        if (isCurrentMonth) {
+          return (
+            <g>
+              <rect 
+                x={newX - 20} 
+                y={newY - 12} 
+                width={40} 
+                height={22} 
+                rx={6} 
+                fill={theme === 'dark' ? '#0f172a' : '#ffffff'} 
+                stroke={theme === 'dark' ? 'rgba(244, 63, 94, 0.5)' : 'rgba(225, 29, 72, 0.4)'}
+                strokeWidth={1}
+              />
+              <text 
+                x={newX} 
+                y={newY + 4} 
+                fill={theme === 'dark' ? '#fb7185' : '#e11d48'} 
+                fontSize={11} 
+                fontWeight={800} 
+                fontFamily="Inter" 
+                textAnchor="middle"
+              >
+                {payload.value}
+              </text>
+            </g>
+          );
+        }
+
+        return (
+          <text 
+            x={newX} 
+            y={newY + 4} 
+            fill={theme === 'dark' ? '#94a3b8' : '#64748b'} 
+            fontSize={11} 
+            fontWeight={600} 
+            fontFamily="Inter" 
+            textAnchor="middle"
+          >
+            {payload.value}
+          </text>
+        );
+      };
+
       const flatRows = useMemo(() => {
         const rows = []; let currentYear = null;
         dashboardData.forEach(row => {
@@ -899,9 +1016,9 @@
         return rows;
       }, [dashboardData, selectedYear]);
 
-      const ROW_HEIGHT = 74; // Приблизна висота рядка даних у пікселях
-      const HEADER_HEIGHT = 44; // Приблизна висота заголовка року
-      const OVERSCAN = 250; // Буферна зона рендеру (невидимі елементи зверху та знизу)
+      const ROW_HEIGHT = 74; 
+      const HEADER_HEIGHT = 44; 
+      const OVERSCAN = 250; 
 
       const { virtualItems, totalHeight } = useMemo(() => {
         let currentTop = 0;
@@ -933,7 +1050,6 @@
             <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">Немає збережених даних</h2>
             <p className="text-slate-500 dark:text-slate-400 max-w-md mb-8">База даних порожня. Додайте свій перший розрахунковий лист, або завантажте ваш файл <b>salaryData.json</b> через меню зліва.</p>
             <div className="flex flex-col sm:flex-row gap-3 items-center">
-              {/* ДОДАНО: Інтерактивний тур (Пульсуюче кільце для фокусу уваги) */}
               <motion.button whileTap={{ scale: 0.95 }} onClick={() => handleTabChange('add')} className="relative px-6 py-3 font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-md flex items-center gap-2">
                  <span className="absolute inset-0 rounded-xl ring-4 ring-blue-500/40 animate-pulse"></span>
                  <IconPlus /> Додати дані
@@ -983,7 +1099,6 @@
       const renderVirtualRows = () => {
         const rows = [];
         
-        // Верхній пустий рядок (створює правильну висоту скролу)
         const topSpacerHeight = virtualItems.length > 0 ? virtualItems[0].top : 0;
         if (topSpacerHeight > 0) rows.push(<tr key="top-spacer" style={{ height: topSpacerHeight }}><td colSpan="5"></td></tr>);
 
@@ -993,14 +1108,12 @@
           } else {
             const row = item.row;
             rows.push(
-              // ДОДАНО: Мікроінтеракції (плавний hover:bg та видимість кнопок тільки при наведенні `group`)
               <motion.tr variants={tableRowVariants} key={row.id} className="hover:bg-blue-50/60 dark:hover:bg-slate-700/50 transition-colors duration-300 ease-in-out border-b border-slate-100 dark:border-slate-700/50 last:border-0 group">
                 <td className="px-6 py-4 font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap"><div className="flex items-center gap-2"><span>{row.monthName} <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">{selectedYear !== 'all' ? row.year : ''}</span></span>{row.hasVacation && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800">ВІДПУСТКА</span>}</div></td>
                 <td className="px-6 py-4 text-right font-bold tabular-nums whitespace-nowrap font-mono tracking-tight" style={getTextColorGradient(row.netPay, minNetPay, maxNetPay, theme)}><PrivacyText text={formatCurrency(row.netPay)} /></td>
                 <td className="px-6 py-4 text-blue-600 dark:text-blue-400 font-bold tabular-nums text-right whitespace-nowrap font-mono tracking-tight"><span title={`Курс: ${Number(row.exchangeRate).toFixed(2)}`} className="border-b border-dashed border-blue-200 dark:border-blue-800/50 pb-0.5 cursor-help"><PrivacyText text={formatCurrency(row.foreignEquivalent, 'USD')} /></span></td>
                 <td className="px-6 py-4 text-center tabular-nums whitespace-nowrap font-mono">{row.calculatedBonusPercent ? <span className="font-bold text-purple-600 dark:text-purple-400">{row.calculatedBonusPercent}</span> : <span className="text-slate-300 dark:text-slate-600">-</span>}</td>
                 <td className="px-6 py-4 text-center whitespace-nowrap">
-                  {/* Кнопки приховані за замовчуванням на десктопі, з'являються плавно */}
                   <div className="flex items-center justify-center gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity duration-300">
                     <button onClick={() => { setSelectedMonthId(row.id); handleTabChange('payslips'); }} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-semibold text-sm transition-colors bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 px-3 py-1.5 rounded-lg">Корінець</button>
                     <button onClick={() => startEditing(row.id)} className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 p-1.5 rounded-lg transition-colors" title="Редагувати"><IconEdit /></button>
@@ -1012,7 +1125,6 @@
           }
         });
 
-        // Нижній пустий рядок
         const bottomSpacerHeight = virtualItems.length > 0 ? totalHeight - (virtualItems[virtualItems.length - 1].top + virtualItems[virtualItems.length - 1].height) : 0;
         if (bottomSpacerHeight > 0) rows.push(<tr key="bottom-spacer" style={{ height: bottomSpacerHeight }}><td colSpan="5"></td></tr>);
 
@@ -1114,9 +1226,9 @@
                   <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Усереднений чистий дохід по місяцях за весь час</p>
                   <div className="h-[280px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                          <RadarChart cx="50%" cy="50%" outerRadius="75%" data={seasonalityData}>
+                          <RadarChart cx="50%" cy="50%" outerRadius="60%" data={seasonalityData}>
                               <PolarGrid stroke={theme === 'dark' ? '#334155' : '#e2e8f0'} />
-                              <PolarAngleAxis dataKey="month" tick={{ fill: theme === 'dark' ? '#94a3b8' : '#64748b', fontSize: 11, fontWeight: 600, fontFamily: 'Inter' }} />
+                              <PolarAngleAxis dataKey="month" tick={<CustomPolarAngleAxis />} />
                               <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={false} axisLine={false} />
                               <Radar name="Середній дохід" dataKey="average" stroke="#a855f7" strokeWidth={2} fill="#a855f7" fillOpacity={0.3} isAnimationActive={true} />
                               <RechartsTooltip content={<CustomRadarTooltip />} cursor={false} />
@@ -1151,10 +1263,8 @@
 
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors">
             <div className="p-5 md:p-6 border-b border-slate-100 dark:border-slate-700"><h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Зведена таблиця</h2></div>
-            {/* ДОДАНО: onScroll для віртуалізації */}
             <div className="overflow-x-auto overflow-y-auto max-h-[600px] no-scrollbar relative" onScroll={handleTableScroll}>
               <table className="w-full text-left text-sm relative">
-                {/* ДОДАНО: backdrop-blur для липкого хедера таблиці */}
                 <thead className="bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur-md text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-30">
                   <tr><th className="px-6 py-4 font-semibold whitespace-nowrap">Місяць</th><th className="px-6 py-4 font-bold text-emerald-600 dark:text-emerald-500 text-right whitespace-nowrap">Зарплата</th><th className="px-6 py-4 font-bold text-blue-600 dark:text-blue-500 text-right whitespace-nowrap">USD ({currencySymbol})</th><th className="px-6 py-4 font-semibold text-center whitespace-nowrap">Премія</th><th className="px-6 py-4 font-semibold text-center whitespace-nowrap">Дія</th></tr>
                 </thead>
@@ -1240,26 +1350,22 @@
       const nextMonthData = summaryData[activeIndex - 1];
       const lastYearMonthData = summaryData.find(m => m.month === activeMonthData.month && m.year === activeMonthData.year - 1);
       
-      // --- ДОДАНО: Генерація Інсайтів (Аномалії та Рекорди) ---
       const insights = useMemo(() => {
         if (!activeMonthData || summaryData.length < 2) return [];
         
         const results = [];
         const pastData = summaryData.filter(d => d.id !== activeMonthData.id);
         
-        // 1. Рекордний дохід
         const maxNetPay = Math.max(...summaryData.map(d => d.netPay));
         if (activeMonthData.netPay === maxNetPay && maxNetPay > 0) {
           results.push({ id: 'net-record', type: 'positive', icon: '🏆', text: 'Ви отримали рекордний чистий дохід за весь час!' });
         }
         
-        // 2. Рекордні податки
         const maxTaxes = Math.max(...summaryData.map(d => d.taxes));
         if (activeMonthData.taxes === maxTaxes && maxTaxes > 0 && pastData.length > 0) {
           results.push({ id: 'tax-record', type: 'neutral', icon: '🏛️', text: `Заплачено рекордну суму податків — ${formatCurrency(maxTaxes)}.` });
         }
         
-        // 3. Аналіз премії
         const monthsWithBonuses = pastData.filter(d => d.totalBonuses > 0);
         if (activeMonthData.totalBonuses > 0 && monthsWithBonuses.length > 0) {
           const avgBonus = monthsWithBonuses.reduce((sum, d) => sum + d.totalBonuses, 0) / monthsWithBonuses.length;
@@ -1272,7 +1378,6 @@
           }
         }
         
-        // 4. Вартість години
         const maxHourly = Math.max(...summaryData.map(d => d.hourlyRate));
         if (activeMonthData.hourlyRate === maxHourly && maxHourly > 0 && pastData.length > 0) {
           results.push({ id: 'hourly-record', type: 'positive', icon: '⏱️', text: 'Вартість вашої робочої години досягла історичного максимуму.' });
@@ -1346,7 +1451,6 @@
             </div>
           </div>
 
-          {/* --- ВІДОБРАЖЕННЯ ІНСАЙТІВ --- */}
           {insights.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 p-4 md:p-5 rounded-2xl border border-indigo-100 dark:border-indigo-800/30 flex items-start gap-3 md:gap-4 transition-colors">
               <div className="text-xl md:text-2xl mt-0.5" style={{ filter: 'drop-shadow(0 2px 4px rgba(99, 102, 241, 0.4))' }}>💡</div>
@@ -1587,7 +1691,6 @@
     };
 
     const AddPayslipView = () => {
-      // ДОДАНО: hasSeenImportHint з контексту
       const { dbData, setDbData, setSelectedMonthId, handleTabChange, showToast, isFormDirty, setIsFormDirty, editingPayslip, setEditingPayslip, hasSeenImportHint, setHasSeenImportHint } = useSalaryContext();
       
       const [monthIdx, setMonthIdx] = useState(0); const [year, setYear] = useState(''); const [pastedText, setPastedText] = useState('');
@@ -1653,12 +1756,9 @@
       const removeAccrual = (id) => { setAccruals(accruals.filter(a => a.id !== id)); markDirty(); };
       const removeDeduction = (id) => { setDeductions(deductions.filter(d => d.id !== id)); markDirty(); };
 
-      const handleParseAttempt = () => {
-        if (!pastedText.trim()) return;
-        
-        const result = ParserModule.parseTextPayslip(pastedText, false);
+      const applyParsedResult = (result) => {
         if (result.success) {
-          setHasSeenImportHint(true); // Успішно спарсили — приховуємо підказку назавжди
+          setHasSeenImportHint(true); 
           const tempAcc = result.accruals.reduce((s, i) => s + i.amount, 0);
           const tempDed = result.deductions.reduce((s, i) => s + i.amount, 0);
           
@@ -1670,6 +1770,43 @@
           showToast("Не вдалося розпізнати дані. Перевірте формат.", "error"); 
           setParserPreviewData(null);
         }
+      };
+
+      const handleParseAttempt = () => {
+        if (!pastedText.trim()) return;
+        
+        // Змінено виклик функції
+        const result = ParserModule.parseTextPayslip(pastedText);
+        applyParsedResult(result);
+      };
+
+      // ДОДАНО: Обробник для завантаження Excel
+      const handleExcelUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            try {
+                const data = new Uint8Array(evt.target.result);
+                const workbook = window.XLSX.read(data, { type: 'array' });
+                
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                
+                // Передаємо Excel напряму як масив масивів (Grid) без конвертації в текст!
+                const rows = window.XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true, defval: null });
+                const result = ParserModule.parseGrid(rows); 
+                
+                applyParsedResult(result);
+            } catch (error) {
+                console.error("Excel parse error:", error);
+                showToast("Помилка читання Excel файлу. Переконайтесь що файл непошкоджений.", "error");
+            }
+        };
+        
+        reader.readAsArrayBuffer(file);
+        e.target.value = null;
       };
 
       const confirmParserPreview = () => {
@@ -1689,7 +1826,6 @@
       const handleFormSubmit = (e) => {
         e.preventDefault();
         
-        // ДОДАНО: Жорсткий захист від від'ємного чистого доходу
         if (currentNet < 0) {
            showToast("Помилка: Чистий дохід не може бути від'ємним. Перевірте суми утримань.", "error");
            return;
@@ -1719,7 +1855,6 @@
           
           <AnimatePresence>
             {parserPreviewData && (
-              // ДОДАНО: Glassmorphism для бекграунду та самого модального вікна
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
                 <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="bg-white/95 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-[0_0_40px_rgba(0,0,0,0.2)] dark:shadow-[0_0_40px_rgba(0,0,0,0.5)] max-w-2xl w-full p-6 border border-white/20 dark:border-slate-700/50 max-h-[90vh] flex flex-col">
                   <div className="flex items-center justify-between mb-4 shrink-0">
@@ -1728,7 +1863,7 @@
                   </div>
                   
                   <div className="overflow-y-auto pr-2 no-scrollbar flex-1">
-                    <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">Ось що нам вдалося розпізнати з вашого тексту. Перевірте дані перед додаванням до форми.</p>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">Ось що нам вдалося розпізнати. Перевірте дані перед додаванням до форми.</p>
 
                     {parserPreviewData.hasSuspiciousData && (
                     <div className="mb-4 flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 p-3 rounded-xl border border-blue-100 dark:border-blue-800/50">
@@ -1774,7 +1909,6 @@
 
           <AnimatePresence>
             {overwriteConfirm && (
-              // ДОДАНО: Glassmorphism
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
                 <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white/95 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 border border-white/20 dark:border-slate-700/50">
                   <div className="flex items-center gap-3 text-amber-600 dark:text-amber-500 mb-4"><div className="bg-amber-100 dark:bg-amber-900/30 p-2 rounded-full"><IconAlert /></div><h3 className="text-xl font-bold">Оновлення даних</h3></div>
@@ -1790,25 +1924,41 @@
 
           {!editingPayslip ? (
             <div className="bg-white dark:bg-slate-800 p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors">
-              <div className="mb-4"><h2 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1">Імпорт даних</h2><p className="text-slate-500 dark:text-slate-400 text-xs md:text-sm">Вставте скопійований текст розрахункового листа</p></div>
+              <div className="mb-4"><h2 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1">Швидкий імпорт</h2><p className="text-slate-500 dark:text-slate-400 text-xs md:text-sm">Завантажте файл Excel або вставте скопійований текст</p></div>
               <div className="relative bg-blue-50 dark:bg-blue-900/20 p-4 md:p-5 rounded-xl border border-blue-100 dark:border-blue-800/50 transition-colors">
                 
-                {/* ДОДАНО: Інтерактивний тултип-онбордінг (Contextual Onboarding) */}
                 {!hasSeenImportHint && pastedText.length === 0 && (
                   <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="absolute -top-14 sm:-top-12 left-4 z-10 bg-indigo-900/80 dark:bg-indigo-900/90 backdrop-blur-md text-white p-2.5 sm:p-3 rounded-xl border border-white/20 shadow-2xl flex items-center gap-3">
                     <span className="text-xl animate-bounce">💡</span>
                     <div className="text-sm">
                       <p className="font-bold">Як це працює?</p>
-                      <p className="opacity-90 text-xs hidden sm:block">Скопіюйте текст із PDF чи Excel (Ctrl+C) і вставте сюди (Ctrl+V).</p>
+                      <p className="opacity-90 text-xs hidden sm:block">Скопіюйте текст із PDF чи завантажте оригінальний файл .xls/.xlsx</p>
                     </div>
                     <button type="button" onClick={() => setHasSeenImportHint(true)} className="ml-1 bg-white/20 hover:bg-white/30 text-white px-2 py-1 rounded text-xs font-bold transition-colors">Зрозумів</button>
                     <div className="absolute -bottom-2 left-6 w-4 h-4 bg-indigo-900/80 dark:bg-indigo-900/90 backdrop-blur-md border-b border-r border-white/20 transform rotate-45"></div>
                   </motion.div>
                 )}
 
-                <div className="flex flex-col md:flex-row gap-3">
-                  <textarea value={pastedText} onChange={(e) => setPastedText(e.target.value)} placeholder="Вставте сюди текст розрахункового листа..." className="flex-1 h-20 md:h-24 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-700 text-slate-800 dark:text-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-colors relative z-0" />
-                  <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={handleParseAttempt} disabled={!pastedText.trim()} className="w-full md:w-32 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm">Розпізнати</motion.button>
+                <div className="flex flex-col md:flex-row gap-4">
+                  <textarea value={pastedText} onChange={(e) => setPastedText(e.target.value)} placeholder="Вставте сюди скопійований текст..." className="flex-1 h-24 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-700 text-slate-800 dark:text-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-colors relative z-0" />
+                  
+                  {/* ДОДАНО: Блок кнопок з опцією Excel */}
+                  <div className="flex flex-col gap-2 w-full md:w-48 shrink-0">
+                    <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={handleParseAttempt} disabled={!pastedText.trim()} className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center justify-center gap-2">
+                        <IconFileText /> Розпізнати текст
+                    </motion.button>
+                    
+                    <div className="flex items-center gap-2 my-0.5">
+                        <hr className="flex-1 border-blue-200 dark:border-blue-800/50" />
+                        <span className="text-[10px] uppercase font-bold text-blue-400 dark:text-blue-600">або</span>
+                        <hr className="flex-1 border-blue-200 dark:border-blue-800/50" />
+                    </div>
+
+                    <label className="w-full py-2.5 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition shadow-sm flex items-center justify-center gap-2 cursor-pointer text-sm border border-emerald-500">
+                        <IconExcel /> Завантажити .xls
+                        <input type="file" accept=".xls,.xlsx,.csv" className="hidden" onChange={handleExcelUpload} />
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1964,11 +2114,9 @@
 
           <AnimatePresence>
             {pendingTab && (
-              // ДОДАНО: Glassmorphism
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4"><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white/95 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 border border-white/20 dark:border-slate-700/50"><div className="flex items-center gap-3 text-amber-600 dark:text-amber-500 mb-4"><div className="bg-amber-100 dark:bg-amber-900/30 p-2 rounded-full"><IconAlert /></div><h3 className="text-xl font-bold">Незбережені дані</h3></div><p className="text-slate-600 dark:text-slate-300 mb-6">Ви внесли зміни у форму. Якщо ви перейдете на іншу вкладку, незбережені дані будуть втрачені.</p><div className="flex justify-end gap-3 flex-wrap"><button onClick={cancelTabChange} className="px-4 py-2 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">Залишитися</button><button onClick={confirmTabChange} className="px-4 py-2 bg-rose-500 text-white font-bold rounded-xl hover:bg-rose-600 transition shadow-sm">Вийти</button></div></motion.div></motion.div>
             )}
             {showClearConfirm && (
-              // ДОДАНО: Glassmorphism
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4"><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white/95 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 border border-white/20 dark:border-slate-700/50"><div className="flex items-center gap-3 text-rose-600 dark:text-rose-500 mb-4"><div className="bg-rose-100 dark:bg-rose-900/30 p-2 rounded-full"><IconAlert /></div><h3 className="text-xl font-bold">Очистити всі дані?</h3></div><p className="text-slate-600 dark:text-slate-300 mb-6">Ви збираєтесь видалити <b>всі розрахункові листи</b> з бази. Цю дію неможливо скасувати.</p><div className="flex justify-end gap-3 flex-wrap"><button onClick={() => setShowClearConfirm(false)} className="px-4 py-2 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">Скасувати</button><button onClick={() => { clearAllData(); setShowClearConfirm(false); }} className="px-4 py-2 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition shadow-sm">Очистити</button></div></motion.div></motion.div>
             )}
           </AnimatePresence>
