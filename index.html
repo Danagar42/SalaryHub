@@ -14,6 +14,8 @@
         extend: {
           fontFamily: {
             sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+            // ДОДАНО: Моноширинний шрифт для цифр
+            mono: ['"JetBrains Mono"', 'monospace'], 
           }
         }
       }
@@ -32,7 +34,9 @@
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+    /* ДОДАНО: JetBrains Mono для преміального банківського вигляду цифр */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700;800&display=swap');
+    
     body { font-family: 'Inter', sans-serif; transition: background-color 0.3s, color 0.3s; }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -42,6 +46,9 @@
     .dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    /* Згладжування для моноширинного шрифту */
+    .font-mono { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-900 dark:bg-slate-900 dark:text-slate-100 transition-colors duration-200 overflow-hidden">
@@ -49,22 +56,8 @@
 
   <script type="text/babel">
     const { useState, useMemo, useEffect, useRef, createContext, useContext, useCallback } = React;
-    const { motion, AnimatePresence } = window.Motion;
-    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip: RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, LabelList } = window.Recharts;
-
-    const apiCache = new Map();
-    const fetchWithCache = async (url) => {
-      if (apiCache.has(url)) return apiCache.get(url);
-      try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('Network error');
-        const data = await res.json();
-        apiCache.set(url, data);
-        return data;
-      } catch (err) {
-        return null;
-      }
-    };
+    const { motion, AnimatePresence, animate } = window.Motion;
+    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip: RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, LabelList, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ReferenceLine } = window.Recharts;
 
     const IconWallet = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>;
     const IconCalendar = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
@@ -85,12 +78,19 @@
     const IconMenu = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>;
     const IconX = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>;
     const IconAreaChart = () => <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>;
+    const IconChevronLeft = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>;
+    const IconChevronRight = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>;
 
     const MONTH_NAMES = ["Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень", "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень"];
 
+    // ПОКРАЩЕННЯ: Більш надійний генератор ID для уникнення колізій при швидких кліках
+    let idCounter = 0;
     const generateId = () => {
-      if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
-      return Date.now().toString(36) + Math.random().toString(36).substring(2);
+      if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+      }
+      idCounter++;
+      return Date.now().toString(36) + Math.random().toString(36).substring(2) + idCounter;
     };
 
     const formatCurrency = (amount, currencyCode = 'UAH') => {
@@ -152,8 +152,8 @@
     };
 
     const useExchangeRates = (dbData) => {
-      const [historicalRates, setHistoricalRates] = useLocalStorage(`salaryHubRates_USD`, {});
-      const [liveRateState, setLiveRateState] = useLocalStorage(`salaryHubLiveRate_USD`, { rate: null, timestamp: null });
+      const [historicalRates, setHistoricalRates] = useLocalStorage(`salaryHubRates_USD_Persist`, {});
+      const [liveRateState, setLiveRateState] = useLocalStorage(`salaryHubLiveRate_USD_Persist`, { rate: null, timestamp: null });
       const [isLoadingRate, setIsLoadingRate] = useState(true);
       const [isOfflineRate, setIsOfflineRate] = useState(false);
 
@@ -163,7 +163,9 @@
           setIsLoadingRate(true);
           setIsOfflineRate(false);
           try {
-            const data = await fetchWithCache(`https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&json`);
+            const res = await fetch(`https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&json`);
+            if (!res.ok) throw new Error('Network error');
+            const data = await res.json();
             if (isMounted && data?.[0]) {
               setLiveRateState({ rate: data[0].rate, timestamp: Date.now() });
             }
@@ -175,7 +177,6 @@
         };
         fetchLive();
         return () => { isMounted = false; };
-        // Empty dependency array ensures this only runs once on mount
       }, []);
 
       useEffect(() => {
@@ -184,33 +185,35 @@
         
         const fetchHistorical = async () => {
           let updated = false;
-          const savedStr = window.localStorage.getItem(`salaryHubRates_USD`);
-          const newRates = savedStr ? JSON.parse(savedStr) : {};
+          const currentRates = { ...historicalRates };
 
           for (const item of dbData) {
             if (!isMounted) break;
-            if (newRates[item.id]) continue; 
+            if (currentRates[item.id]) continue;
             
             try {
               const dateStr = `${item.id.replace('-', '')}01`; 
-              const data = await fetchWithCache(`https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&date=${dateStr}&json`);
+              const res = await fetch(`https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&date=${dateStr}&json`);
+              if (!res.ok) continue;
+              const data = await res.json();
               
               if (data?.[0]) {
-                newRates[item.id] = data[0].rate;
+                currentRates[item.id] = data[0].rate;
                 updated = true;
               }
             } catch (e) {
+              console.warn(`Failed to fetch rate for ${item.id}`, e);
             }
           }
           
           if (updated && isMounted) {
-            setHistoricalRates(newRates);
+            setHistoricalRates(currentRates);
           }
         };
         
         fetchHistorical();
         return () => { isMounted = false; };
-      }, [dbData]); // Removed historicalRates/setHistoricalRates from deps to prevent loops
+      }, [dbData]);
 
       return { 
         liveRate: liveRateState.rate, 
@@ -248,7 +251,6 @@
         return { accrual, deduction };
       },
       parseTextPayslip: (text, isCsv) => {
-        // Sanitization: прибираємо табличне сміття
         const cleanText = text.replace(/(={2,}|-{2,}|\*{2,}|\|)/g, ' ');
         const lines = cleanText.split('\n'); const separator = isCsv ? (cleanText.includes(';') ? ';' : (cleanText.includes('\t') ? '\t' : ',')) : null;
         const accruals = []; const deductions = []; const period = ParserModule.detectPeriod(lines);
@@ -260,6 +262,24 @@
       }
     };
 
+    class WidgetErrorBoundary extends React.Component {
+      constructor(props) { super(props); this.state = { hasError: false }; }
+      static getDerivedStateFromError(error) { return { hasError: true }; }
+      componentDidCatch(error, errorInfo) { console.error("Widget Error:", error, errorInfo); }
+      render() {
+        if (this.state.hasError) {
+          return (
+            <div className="h-64 flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-rose-200 dark:border-rose-900/50 p-4 text-center">
+              <IconAlert />
+              <p className="mt-2 text-sm font-medium">Не вдалося завантажити віджет.</p>
+              <button onClick={() => this.setState({ hasError: false })} className="mt-2 text-xs text-blue-500 hover:underline">Спробувати знову</button>
+            </div>
+          );
+        }
+        return this.props.children;
+      }
+    }
+
     const pageVariants = { initial: { opacity: 0, y: 15 }, animate: { opacity: 1, y: 0, transition: { duration: 0.3 } }, exit: { opacity: 0, y: -15, transition: { duration: 0.2 } } };
     const tableContainerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.05 } }};
     const tableRowVariants = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 }};
@@ -270,6 +290,8 @@
     const SalaryProvider = ({ children }) => {
       const [theme, setTheme] = useLocalStorage('salaryHubTheme', 'light');
       const [isPrivateMode, setIsPrivateMode] = useLocalStorage('salaryHubPrivacy', false);
+      
+      const [hasSeenImportHint, setHasSeenImportHint] = useLocalStorage('salaryHub_hasSeenImportHint', false);
       
       const [activeTab, setActiveTab] = useState('dashboard');
       const [selectedMonthId, setSelectedMonthId] = useState(null);
@@ -284,13 +306,23 @@
       const [hasUnexportedChanges, setHasUnexportedChanges] = useState(false);
       
       const dbData = _dbData;
+      
       const setDbData = useCallback((newData) => {
         _setDbData(newData);
         setHasUnexportedChanges(true);
       }, [_setDbData]);
 
       const { liveRate, rateTimestamp, historicalRates, isLoadingRate, isOfflineRate } = useExchangeRates(dbData);
-      const [toast, setToast] = useState(null);
+      
+      const [toasts, setToasts] = useState([]);
+
+      const showToast = useCallback((message, type = 'success') => {
+        const id = Date.now() + Math.random();
+        setToasts(prev => [...prev, { id, message, type }]);
+        setTimeout(() => {
+          setToasts(prev => prev.filter(t => t.id !== id));
+        }, 4000);
+      }, []);
 
       useEffect(() => {
         if (theme === 'dark') document.documentElement.classList.add('dark');
@@ -299,11 +331,6 @@
 
       const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
       const togglePrivateMode = () => setIsPrivateMode(prev => !prev);
-
-      const showToast = useCallback((message, type = 'success') => {
-        setToast({ message, type, id: Date.now() });
-        setTimeout(() => setToast(null), 4000);
-      }, []);
 
       const handleTabChange = useCallback((newTab, force = false) => {
         if (!force && isFormDirty && newTab !== activeTab) { setPendingTab(newTab); } 
@@ -361,7 +388,13 @@
           const totalAccrued = validAccruals.reduce((sum, item) => sum + Number(item.amount), 0);
           const totalDeducted = validDeductions.reduce((sum, item) => sum + Number(item.amount), 0);
           
-          const totalBonuses = validAccruals.filter(a => a.name.toLowerCase().includes('премі') && !a.name.toLowerCase().includes('за рік') && !a.name.toLowerCase().includes('річн')).reduce((sum, item) => sum + Number(item.amount), 0);
+          const totalBonuses = validAccruals
+            .filter(a => a.name.toLowerCase().includes('премі') && !a.name.toLowerCase().includes('за рік') && !a.name.toLowerCase().includes('річн'))
+            .reduce((sum, item) => sum + Number(item.amount), 0);
+            
+          const otherBonuses = validAccruals
+            .filter(a => a.name.toLowerCase().includes('матеріал') || a.name.toLowerCase().includes('допомог'))
+            .reduce((sum, item) => sum + Number(item.amount), 0);
 
           let prevMonthVacationPayout = 0; let calculatedBonusPercent = null; let bonusPercentNumeric = 0;
 
@@ -409,13 +442,35 @@
           const hourlyRate = okladHours > 0 ? ((okladAmount + stazhAmount) / okladHours) : 0;
           const hasVacation = validAccruals.some(a => a.name.toLowerCase().includes('щорічна відпуст'));
 
-          const actualRate = historicalRates[month.id] || 40.0; // Fallback
+          const actualRate = historicalRates[month.id] || 40.0;
           const hourlyRateForeign = hourlyRate / actualRate;
           
+          const calcPdfo = totalAccrued * 0.18;
+          const vzRate = month.year <= 2024 ? 0.015 : 0.05; 
+          const calcVz = totalAccrued * vzRate;
+          
+          let actualPdfo = 0;
+          let actualVz = 0;
+          
+          validDeductions.forEach(d => {
+            const lowerName = d.name.toLowerCase();
+            if (lowerName.includes('податок') || lowerName.includes('пдфо')) actualPdfo += Number(d.amount);
+            if (lowerName.includes('військов') || lowerName.includes('вз')) actualVz += Number(d.amount);
+          });
+          
+          const pdfoDiff = Math.abs(actualPdfo - calcPdfo);
+          const vzDiff = Math.abs(actualVz - calcVz);
+          const taxWarnings = [];
+          
+          if (actualPdfo > 0 && pdfoDiff > 5) taxWarnings.push(`ПДФО: очікується ~${formatCurrency(calcPdfo)}, вказано ${formatCurrency(actualPdfo)}`);
+          if (actualVz > 0 && vzDiff > 5) taxWarnings.push(`ВЗ: очікується ~${formatCurrency(calcVz)} (${(vzRate*100).toFixed(1)}%), вказано ${formatCurrency(actualVz)}`);
+
           return { 
             ...month, accruals: validAccruals, deductions: validDeductions,
-            totalAccrued, totalDeducted, taxes, netPay, toBank, advanceSum, prevMonthVacationPayout, totalBonuses, hasVacation, calculatedBonusPercent, bonusPercentNumeric, hourlyRate, hourlyRateForeign,
-            foreignEquivalent: netPay / actualRate, exchangeRate: actualRate
+            totalAccrued, totalDeducted, taxes, netPay, toBank, advanceSum, prevMonthVacationPayout, 
+            totalBonuses, otherBonuses, hasVacation, calculatedBonusPercent, bonusPercentNumeric, hourlyRate, hourlyRateForeign,
+            foreignEquivalent: netPay / actualRate, exchangeRate: actualRate,
+            taxWarnings
           };
         });
       }, [dbData, historicalRates]);
@@ -453,24 +508,27 @@
         selectedMonthId, setSelectedMonthId, isFormDirty, setIsFormDirty, editingPayslip, setEditingPayslip, startEditing, clearAllData, generateDummyData,
         dbData, setDbData, summaryData, liveRate, rateTimestamp, isLoadingRate, isOfflineRate, historicalRates,
         generateAndDownloadJSONFile, deletePayslip, showToast, hasUnexportedChanges,
-        isMobileMenuOpen, setIsMobileMenuOpen
-      }), [theme, isPrivateMode, activeTab, pendingTab, selectedMonthId, isFormDirty, editingPayslip, dbData, summaryData, liveRate, rateTimestamp, isLoadingRate, isOfflineRate, historicalRates, handleTabChange, confirmTabChange, cancelTabChange, setDbData, generateAndDownloadJSONFile, deletePayslip, showToast, hasUnexportedChanges, startEditing, clearAllData, generateDummyData, isMobileMenuOpen]);
+        isMobileMenuOpen, setIsMobileMenuOpen,
+        hasSeenImportHint, setHasSeenImportHint
+      }), [theme, isPrivateMode, activeTab, pendingTab, selectedMonthId, isFormDirty, editingPayslip, dbData, summaryData, liveRate, rateTimestamp, isLoadingRate, isOfflineRate, historicalRates, handleTabChange, confirmTabChange, cancelTabChange, setDbData, generateAndDownloadJSONFile, deletePayslip, showToast, hasUnexportedChanges, startEditing, clearAllData, generateDummyData, isMobileMenuOpen, hasSeenImportHint]);
       
       return (
         <SalaryContext.Provider value={contextValue}>
           {children}
-          <AnimatePresence>
-            {toast && (
-              <motion.div initial={{ opacity: 0, y: 50, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.9 }}
-                className={`fixed bottom-6 right-6 z-[100] flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl font-medium text-sm border ${
-                  toast.type === 'error' ? 'bg-rose-50 dark:bg-rose-900/40 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-800' :
-                  toast.type === 'warning' ? 'bg-amber-50 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800' : 'bg-emerald-50 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                }`}
-              >
-                <IconAlert /> {toast.message}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none">
+            <AnimatePresence>
+              {toasts.map((toast) => (
+                <motion.div key={toast.id} layout initial={{ opacity: 0, x: 50, scale: 0.9 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+                  className={`pointer-events-auto flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl font-medium text-sm border ${
+                    toast.type === 'error' ? 'bg-rose-50 dark:bg-rose-900/40 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-800' :
+                    toast.type === 'warning' ? 'bg-amber-50 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800' : 'bg-emerald-50 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                  }`}
+                >
+                  <IconAlert /> {toast.message}
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
         </SalaryContext.Provider>
       );
     };
@@ -481,14 +539,32 @@
 
     const AnimatedNumber = ({ value, currency = 'UAH', className = "" }) => {
       const { isPrivateMode } = useSalaryContext();
-      const displayValue = formatCurrency(value, currency);
+      const nodeRef = useRef(null);
+      const prevValue = useRef(value);
+
+      useEffect(() => {
+        const node = nodeRef.current;
+        if (!node) return;
+
+        // Плавна анімація прокрутки чисел
+        const controls = animate(prevValue.current, value, {
+          duration: 0.8,
+          ease: "easeOut",
+          onUpdate(latest) {
+            node.textContent = formatCurrency(latest, currency);
+          }
+        });
+
+        prevValue.current = value;
+        return controls.stop;
+      }, [value, currency]);
+
       return (
-        <span className={`inline-flex overflow-hidden relative align-bottom ${className} ${isPrivateMode ? 'filter blur-[6px] select-none opacity-50 transition-all duration-300' : 'transition-all duration-300'}`}>
-          <AnimatePresence mode="popLayout">
-            <motion.span key={value} initial={{ y: "100%", opacity: 0, filter: "blur(4px)" }} animate={{ y: "0%", opacity: 1, filter: "blur(0px)" }} exit={{ y: "-100%", opacity: 0, filter: "blur(4px)" }} transition={{ type: "spring", bounce: 0, duration: 0.4 }} className="inline-block">
-              {displayValue}
-            </motion.span>
-          </AnimatePresence>
+        <span 
+          ref={nodeRef} 
+          className={`font-mono inline-block ${className} ${isPrivateMode ? 'filter blur-[6px] select-none opacity-50' : ''} transition-all duration-300`}
+        >
+          {formatCurrency(prevValue.current, currency)}
         </span>
       );
     };
@@ -520,7 +596,8 @@
           </motion.div>
           <AnimatePresence>
             {isOpen && (
-              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.15 }} className={`absolute top-full left-0 md:left-auto md:right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden ${dropdownClass}`}>
+              // ДОДАНО: Скляний морфізм (Glassmorphism) для випадаючого списку
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.15 }} className={`absolute top-full left-0 md:left-auto md:right-0 mt-2 bg-white/90 dark:bg-slate-900/80 backdrop-blur-md border border-slate-200/50 dark:border-slate-700/50 rounded-xl shadow-2xl z-50 overflow-hidden ${dropdownClass}`}>
                 <div className="max-h-64 overflow-y-auto">
                   {options.map(opt => (
                     <div key={opt.value} onClick={() => { onChange(opt.value); setIsOpen(false); }} className={`px-4 py-3 cursor-pointer transition-colors flex items-center justify-between ${value === opt.value ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-bold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>
@@ -538,6 +615,13 @@
 
     const ConfirmDeleteButton = ({ onConfirm }) => {
       const [isConfirming, setIsConfirming] = useState(false);
+      
+      useEffect(() => {
+        const handleKeyDown = (e) => { if (e.key === 'Escape') setIsConfirming(false); };
+        if (isConfirming) document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+      }, [isConfirming]);
+
       return (
         <button onClick={() => isConfirming ? onConfirm() : setIsConfirming(true)} onMouseLeave={() => setIsConfirming(false)} className={`font-semibold text-sm transition-colors px-2 py-1.5 rounded-lg flex items-center justify-center min-w-[32px] ${isConfirming ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-400 w-[70px]' : 'text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-slate-800'}`} aria-label={isConfirming ? "Підтвердити" : "Видалити"} title="Видалити">
           {isConfirming ? "Точно?" : <IconTrash />}
@@ -550,26 +634,27 @@
       if (active && payload && payload.length) {
         const pointData = payload[0].payload;
         return (
-          <div className="bg-slate-800 dark:bg-slate-900 text-white text-xs py-3 px-4 rounded-xl shadow-xl flex flex-col gap-1.5 border border-slate-700 dark:border-slate-600 min-w-[150px]">
-            <div className="font-semibold text-slate-300 mb-1 border-b border-slate-700 dark:border-slate-600 pb-1.5 flex justify-between items-center">
+          // ДОДАНО: Скляний морфізм для тултипів графіка
+          <div className="bg-slate-900/80 dark:bg-slate-900/70 backdrop-blur-md text-white text-xs py-3 px-4 rounded-xl shadow-2xl flex flex-col gap-1.5 border border-white/10 dark:border-slate-600/50 min-w-[150px]">
+            <div className="font-semibold text-slate-300 mb-1 border-b border-white/10 dark:border-slate-700/50 pb-1.5 flex justify-between items-center">
               <span>{pointData.monthName} {pointData.year}</span>
               {pointData.hasVacation && <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded ml-2">Відпустка</span>}
             </div>
             {mode === 'hourly' ? (
               <>
-                <div className="flex justify-between items-center gap-4 mt-1"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-cyan-500"></div><span className="text-slate-400 font-medium">За годину (₴)</span></div><span className="font-bold text-white">{isPrivateMode ? '***' : formatCurrency(pointData.hourlyRate)}</span></div>
-                <div className="flex justify-between items-center gap-4"><div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-400"></div><span className="text-slate-400 font-medium">За годину ({currencySymbol})</span></div><span className="font-bold text-slate-200">{isPrivateMode ? '***' : formatCurrency(pointData.hourlyRateForeign, 'USD')}</span></div>
+                <div className="flex justify-between items-center gap-4 mt-1"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-cyan-500"></div><span className="text-slate-400 font-medium">За годину (₴)</span></div><span className="font-bold text-white font-mono">{isPrivateMode ? '***' : formatCurrency(pointData.hourlyRate)}</span></div>
+                <div className="flex justify-between items-center gap-4"><div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-400"></div><span className="text-slate-400 font-medium">За годину ({currencySymbol})</span></div><span className="font-bold text-slate-200 font-mono">{isPrivateMode ? '***' : formatCurrency(pointData.hourlyRateForeign, 'USD')}</span></div>
               </>
             ) : mode === 'bonus' ? (
-              <div className="flex justify-between items-center gap-4 mt-1"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-purple-500"></div><span className="text-slate-400 font-medium">Премія</span></div><span className="font-bold text-white">{isPrivateMode ? '***' : (pointData.calculatedBonusPercent || '0%')}</span></div>
+              <div className="flex justify-between items-center gap-4 mt-1"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-purple-500"></div><span className="text-slate-400 font-medium">Премія</span></div><span className="font-bold text-white font-mono">{isPrivateMode ? '***' : (pointData.calculatedBonusPercent || '0%')}</span></div>
             ) : (
               <>
-                <div className="flex justify-between items-center gap-4 mt-1"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div><span className="text-slate-400 font-medium">В гривнях (₴)</span></div><span className="font-bold text-white">{isPrivateMode ? '***' : formatCurrency(pointData.netPay)}</span></div>
-                <div className="flex justify-between items-center gap-4"><div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-400"></div><span className="text-slate-400 font-medium">USD ({currencySymbol})</span></div><span className="font-bold text-slate-200">{isPrivateMode ? '***' : formatCurrency(pointData.foreignEquivalent, 'USD')}</span></div>
+                <div className="flex justify-between items-center gap-4 mt-1"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div><span className="text-slate-400 font-medium">В гривнях (₴)</span></div><span className="font-bold text-white font-mono">{isPrivateMode ? '***' : formatCurrency(pointData.netPay)}</span></div>
+                <div className="flex justify-between items-center gap-4"><div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-400"></div><span className="text-slate-400 font-medium">USD ({currencySymbol})</span></div><span className="font-bold text-slate-200 font-mono">{isPrivateMode ? '***' : formatCurrency(pointData.foreignEquivalent, 'USD')}</span></div>
                 {pointData.calculatedBonusPercent && (
                   <div className="flex justify-between items-center gap-4 pt-1.5 mt-0.5 border-t border-slate-700/50 dark:border-slate-600/50">
                     <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-purple-500"></div><span className="text-slate-400 font-medium">Премія</span></div>
-                    <span className="font-bold text-purple-400">{isPrivateMode ? '***' : pointData.calculatedBonusPercent}</span>
+                    <span className="font-bold text-purple-400 font-mono">{isPrivateMode ? '***' : pointData.calculatedBonusPercent}</span>
                   </div>
                 )}
               </>
@@ -587,12 +672,28 @@
         const data = payload[0];
         const percent = total > 0 ? ((data.value / total) * 100).toFixed(1) : 0;
         return (
-          <div className="bg-slate-800 dark:bg-slate-900 text-white text-sm py-2.5 px-3.5 rounded-xl shadow-xl border border-slate-700 dark:border-slate-600 flex flex-col gap-1 z-50">
+          <div className="bg-slate-900/80 dark:bg-slate-900/70 backdrop-blur-md text-white text-sm py-2.5 px-3.5 rounded-xl shadow-2xl border border-white/10 dark:border-slate-700/50 flex flex-col gap-1 z-50">
             <div className="flex justify-between items-center gap-4">
               <span className="font-medium text-slate-300 flex items-center"><div className="w-2.5 h-2.5 rounded-full mr-2" style={{backgroundColor: data.payload.fill}}></div>{data.name}</span>
-              <span className="font-bold text-slate-400 text-xs">{percent}%</span>
+              <span className="font-bold text-slate-400 text-xs tabular-nums">{percent}%</span>
             </div>
-            <span className="font-bold text-white pl-4 ml-0.5">{isPrivateMode ? '***' : formatCurrency(data.value)}</span>
+            <span className="font-bold text-white pl-4 ml-0.5 font-mono">{isPrivateMode ? '***' : formatCurrency(data.value)}</span>
+          </div>
+        );
+      }
+      return null;
+    };
+
+    const CustomRadarTooltip = ({ active, payload }) => {
+      const { isPrivateMode } = useSalaryContext();
+      if (active && payload && payload.length) {
+        const data = payload[0].payload;
+        if (!data.average) return null; 
+        return (
+          <div className="bg-slate-900/80 dark:bg-slate-900/70 backdrop-blur-md text-white text-xs py-2.5 px-3.5 rounded-xl shadow-2xl border border-white/10 dark:border-slate-700/50 flex flex-col gap-1 z-50">
+            <span className="font-medium text-slate-300 mb-1 border-b border-white/10 dark:border-slate-700/50 pb-1.5">{data.fullMonth} (середнє)</span>
+            <span className="font-bold text-purple-400 font-mono text-sm tracking-tight">{isPrivateMode ? '***' : formatCurrency(data.average)}</span>
+            <span className="text-[10px] text-slate-400 mt-1 font-mono">Враховано записів: {data.count}</span>
           </div>
         );
       }
@@ -604,6 +705,21 @@
       const gridStroke = theme === 'dark' ? '#334155' : '#e2e8f0';
       const tickFill = theme === 'dark' ? '#94a3b8' : '#64748b';
       const tooltipCursor = theme === 'dark' ? '#475569' : '#cbd5e1';
+
+      // --- ДОДАНО: Визначаємо старти років для вертикальних ліній ---
+      const yearMarkers = React.useMemo(() => {
+        if (!showYearInLabels) return [];
+        const markers = [];
+        let currentYear = null;
+        chartData.forEach((d, index) => {
+          if (d.year !== currentYear) {
+            // Не малюємо лінію на найпершій точці графіка, щоб уникнути накладання на вісь Y
+            if (index > 0) markers.push({ id: d.id, year: d.year });
+            currentYear = d.year;
+          }
+        });
+        return markers;
+      }, [chartData, showYearInLabels]);
 
       const handleChartClick = (e) => {
         if (e && e.activePayload && e.activePayload.length > 0) {
@@ -649,10 +765,20 @@
              if (value <= prev && value <= next) yPos = y + 20; 
         }
 
+        // ДОДАНО: Тло для міток, щоб гарантувати читабельність поверх інших ліній
+        const bgColor = theme === 'dark' ? '#1e293b' : '#ffffff';
+
         return (
-            <text x={x} y={yPos} fill={color} fontSize={11} fontWeight={700} textAnchor="middle" style={{ filter: theme === 'dark' ? 'drop-shadow(0px 2px 2px rgba(0,0,0,0.5))' : 'none', pointerEvents: 'none' }}>
-                {displayValue}
-            </text>
+            <g style={{ filter: theme === 'dark' ? 'drop-shadow(0px 2px 2px rgba(0,0,0,0.5))' : 'none', pointerEvents: 'none' }}>
+               {/* Напівпрозоре тло під текстом (імітація stroke) */}
+               <text x={x} y={yPos} fill={bgColor} fontSize={11} fontWeight={800} fontFamily="JetBrains Mono, monospace" textAnchor="middle" stroke={bgColor} strokeWidth={3} strokeLinejoin="round">
+                   {displayValue}
+               </text>
+               {/* Сам текст мітки */}
+               <text x={x} y={yPos} fill={color} fontSize={11} fontWeight={700} fontFamily="JetBrains Mono, monospace" textAnchor="middle">
+                   {displayValue}
+               </text>
+            </g>
         );
       };
 
@@ -668,11 +794,32 @@
         const ticks = []; for (let i = start; i <= end + (step / 10); i += step) ticks.push(Math.round(i * 100) / 100); return ticks;
       };
 
+      // --- ДОДАНО: Функція рендеру ліній розділення років ---
+      const renderYearMarkers = (yAxisId) => yearMarkers.map(m => (
+        <ReferenceLine 
+          key={`ref-${m.id}`} 
+          x={m.id} 
+          yAxisId={yAxisId}
+          stroke={theme === 'dark' ? 'rgba(244, 63, 94, 0.4)' : 'rgba(225, 29, 72, 0.3)'} 
+          strokeWidth={1} 
+          strokeDasharray="6 4" 
+          label={({ viewBox }) => { 
+            if (!viewBox || viewBox.x === undefined) return null; 
+            return (
+              <g style={{ pointerEvents: 'none' }}>
+                <rect x={viewBox.x + 4} y={-25} width={34} height={18} rx={4} fill={theme === 'dark' ? '#0f172a' : '#ffffff'} stroke={theme === 'dark' ? 'rgba(244, 63, 94, 0.5)' : 'rgba(225, 29, 72, 0.4)'} />
+                <text x={viewBox.x + 21} y={-12} fill={theme === 'dark' ? '#fb7185' : '#e11d48'} fontSize={10} fontWeight={800} textAnchor="middle" fontFamily="Inter">{m.year}</text>
+              </g>
+            ); 
+          }} 
+        />
+      ));
+
       if (mode === 'bonus') {
         let bonusTicks = getTicks('bonusPercentNumeric', 4, true); if (bonusTicks[bonusTicks.length - 1] < 100) bonusTicks = [0, 25, 50, 75, 100];
         return (
           <div style={{ width: '100%', height: 320, cursor: 'pointer' }}>
-            <ResponsiveContainer><LineChart onClick={handleChartClick} data={chartData} margin={{ top: 40, right: 15, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} /><XAxis dataKey="id" tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} /><YAxis dataKey="bonusPercentNumeric" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : `${val}%`} domain={[bonusTicks[0], bonusTicks[bonusTicks.length - 1]]} ticks={bonusTicks} width={45} /><RechartsTooltip content={<CustomRechartsTooltip mode="bonus" currencySymbol={currencySymbol} />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} /><Line type="monotone" dataKey="bonusPercentNumeric" name="Премія (%)" stroke="#a855f7" strokeWidth={3} dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#a855f7', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#a855f7', strokeWidth: 0 }} isAnimationActive={true}><LabelList dataKey="bonusPercentNumeric" content={(props) => <CustomChartLabel {...props} dataKey="bonusPercentNumeric" />}/></Line></LineChart></ResponsiveContainer>
+            <ResponsiveContainer><LineChart onClick={handleChartClick} data={chartData} margin={{ top: 40, right: 15, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} /><XAxis dataKey="id" padding={{ left: 20, right: 20 }} tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} /><YAxis dataKey="bonusPercentNumeric" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : `${val}%`} domain={[bonusTicks[0], bonusTicks[bonusTicks.length - 1]]} ticks={bonusTicks} width={45} /><RechartsTooltip content={<CustomRechartsTooltip mode="bonus" currencySymbol={currencySymbol} />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} />{renderYearMarkers()}<Line type="monotone" dataKey="bonusPercentNumeric" name="Премія (%)" stroke="#a855f7" strokeWidth={3} dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#a855f7', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#a855f7', strokeWidth: 0 }} isAnimationActive={true}><LabelList dataKey="bonusPercentNumeric" content={(props) => <CustomChartLabel {...props} dataKey="bonusPercentNumeric" />}/></Line></LineChart></ResponsiveContainer>
           </div>
         );
       }
@@ -680,7 +827,7 @@
         const uahTicks = getTicks('hourlyRate', 4); const foreignTicks = getTicks('hourlyRateForeign', 4);
         return (
           <div style={{ width: '100%', height: 320, cursor: 'pointer' }}>
-            <ResponsiveContainer><LineChart onClick={handleChartClick} data={chartData} margin={{ top: 40, right: 0, left: 5, bottom: 0 }}><defs><linearGradient id="colorHourly" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#06b6d4" stopOpacity={1}/><stop offset="100%" stopColor="#3b82f6" stopOpacity={1}/></linearGradient></defs><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} /><XAxis dataKey="id" tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} /><YAxis yAxisId="left" dataKey="hourlyRate" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : formatCurrency(val)} domain={[uahTicks[0], uahTicks[uahTicks.length - 1]]} ticks={uahTicks} width={85} /><YAxis yAxisId="right" orientation="right" dataKey="hourlyRateForeign" axisLine={false} tickLine={false} tick={{ fill: tickFill, opacity: 0.7, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : `${val} ${currencySymbol}`} domain={[foreignTicks[0], foreignTicks[foreignTicks.length - 1]]} ticks={foreignTicks} width={75} /><RechartsTooltip content={<CustomRechartsTooltip mode="hourly" currencySymbol={currencySymbol} />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} /><Line yAxisId="left" type="monotone" dataKey="hourlyRate" name="Гривні/год (₴)" stroke="url(#colorHourly)" strokeWidth={3} dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#06b6d4', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#06b6d4', strokeWidth: 0 }} isAnimationActive={true}><LabelList dataKey="hourlyRate" content={(props) => <CustomChartLabel {...props} dataKey="hourlyRate" />}/></Line><Line yAxisId="right" type="monotone" dataKey="hourlyRateForeign" name={`USD/год (${currencySymbol})`} stroke={tickFill} strokeWidth={1.5} strokeDasharray="6 6" dot={{ r: 2, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: tickFill }} activeDot={{ r: 4, fill: tickFill, strokeWidth: 0 }} isAnimationActive={true} /></LineChart></ResponsiveContainer>
+            <ResponsiveContainer><LineChart onClick={handleChartClick} data={chartData} margin={{ top: 40, right: 0, left: 5, bottom: 0 }}><defs><linearGradient id="colorHourly" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#06b6d4" stopOpacity={1}/><stop offset="100%" stopColor="#3b82f6" stopOpacity={1}/></linearGradient></defs><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} /><XAxis dataKey="id" padding={{ left: 20, right: 20 }} tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} /><YAxis yAxisId="left" dataKey="hourlyRate" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : formatCurrency(val)} domain={[uahTicks[0], uahTicks[uahTicks.length - 1]]} ticks={uahTicks} width={85} /><YAxis yAxisId="right" orientation="right" dataKey="hourlyRateForeign" axisLine={false} tickLine={false} tick={{ fill: tickFill, opacity: 0.7, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : `${val} ${currencySymbol}`} domain={[foreignTicks[0], foreignTicks[foreignTicks.length - 1]]} ticks={foreignTicks} width={75} /><RechartsTooltip content={<CustomRechartsTooltip mode="hourly" currencySymbol={currencySymbol} />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} />{renderYearMarkers('left')}<Line yAxisId="left" type="monotone" dataKey="hourlyRate" name="Гривні/год (₴)" stroke="url(#colorHourly)" strokeWidth={3} dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#06b6d4', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#06b6d4', strokeWidth: 0 }} isAnimationActive={true}><LabelList dataKey="hourlyRate" content={(props) => <CustomChartLabel {...props} dataKey="hourlyRate" />}/></Line><Line yAxisId="right" type="monotone" dataKey="hourlyRateForeign" name={`USD/год (${currencySymbol})`} stroke={tickFill} strokeWidth={1.5} strokeDasharray="6 6" dot={{ r: 2, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: tickFill }} activeDot={{ r: 4, fill: tickFill, strokeWidth: 0 }} isAnimationActive={true} /></LineChart></ResponsiveContainer>
           </div>
         );
       }
@@ -688,7 +835,7 @@
       const uahTicks = getTicks('netPay', 4); const foreignTicks = getTicks('foreignEquivalent', 4);
       return (
         <div style={{ width: '100%', height: 320, cursor: 'pointer' }}>
-          <ResponsiveContainer><LineChart onClick={handleChartClick} data={chartData} margin={{ top: 40, right: 0, left: 5, bottom: 0 }}><defs><linearGradient id="colorUah" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={1}/><stop offset="50%" stopColor="#f59e0b" stopOpacity={1}/><stop offset="100%" stopColor="#ef4444" stopOpacity={1}/></linearGradient></defs><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} /><XAxis dataKey="id" tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} /><YAxis yAxisId="left" dataKey="netPay" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : formatCurrency(val)} domain={[uahTicks[0], uahTicks[uahTicks.length - 1]]} ticks={uahTicks} width={85} /><YAxis yAxisId="right" orientation="right" dataKey="foreignEquivalent" axisLine={false} tickLine={false} tick={{ fill: tickFill, opacity: 0.7, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : `${val} ${currencySymbol}`} domain={[foreignTicks[0], foreignTicks[foreignTicks.length - 1]]} ticks={foreignTicks} width={75} /><RechartsTooltip content={<CustomRechartsTooltip mode="income" currencySymbol={currencySymbol} />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} /><Line yAxisId="left" type="monotone" dataKey="netPay" name="В гривнях (₴)" stroke="url(#colorUah)" strokeWidth={3} dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#10b981', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#10b981', strokeWidth: 0 }} isAnimationActive={true}><LabelList dataKey="netPay" content={(props) => <CustomChartLabel {...props} dataKey="netPay" />}/></Line><Line yAxisId="right" type="monotone" dataKey="foreignEquivalent" name={`USD (${currencySymbol})`} stroke={tickFill} strokeWidth={1.5} strokeDasharray="6 6" dot={{ r: 2, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: tickFill }} activeDot={{ r: 4, fill: tickFill, strokeWidth: 0 }} isAnimationActive={true} /></LineChart></ResponsiveContainer>
+          <ResponsiveContainer><LineChart onClick={handleChartClick} data={chartData} margin={{ top: 40, right: 0, left: 5, bottom: 0 }}><defs><linearGradient id="colorUah" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={1}/><stop offset="50%" stopColor="#f59e0b" stopOpacity={1}/><stop offset="100%" stopColor="#ef4444" stopOpacity={1}/></linearGradient></defs><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} /><XAxis dataKey="id" padding={{ left: 20, right: 20 }} tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} /><YAxis yAxisId="left" dataKey="netPay" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : formatCurrency(val)} domain={[uahTicks[0], uahTicks[uahTicks.length - 1]]} ticks={uahTicks} width={85} /><YAxis yAxisId="right" orientation="right" dataKey="foreignEquivalent" axisLine={false} tickLine={false} tick={{ fill: tickFill, opacity: 0.7, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : `${val} ${currencySymbol}`} domain={[foreignTicks[0], foreignTicks[foreignTicks.length - 1]]} ticks={foreignTicks} width={75} /><RechartsTooltip content={<CustomRechartsTooltip mode="income" currencySymbol={currencySymbol} />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} />{renderYearMarkers('left')}<Line yAxisId="left" type="monotone" dataKey="netPay" name="В гривнях (₴)" stroke="url(#colorUah)" strokeWidth={3} dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#10b981', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#10b981', strokeWidth: 0 }} isAnimationActive={true}><LabelList dataKey="netPay" content={(props) => <CustomChartLabel {...props} dataKey="netPay" />}/></Line><Line yAxisId="right" type="monotone" dataKey="foreignEquivalent" name={`USD (${currencySymbol})`} stroke={tickFill} strokeWidth={1.5} strokeDasharray="6 6" dot={{ r: 2, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: tickFill }} activeDot={{ r: 4, fill: tickFill, strokeWidth: 0 }} isAnimationActive={true} /></LineChart></ResponsiveContainer>
         </div>
       );
     });
@@ -700,7 +847,9 @@
       
       const currencySymbol = '$';
 
-      // Memoized обчислення статистик
+      // ДОДАНО: Стан для віртуального скролу таблиці
+      const [scrollTop, setScrollTop] = useState(0);
+
       const { dashboardData, avgEarnedUAH, avgEarnedForeign, minNetPay, maxNetPay, availableYears } = useMemo(() => {
         const aYears = [...new Set(summaryData.map(d => d.year))].sort((a, b) => b - a);
         const dashData = selectedYear === 'all' ? summaryData : summaryData.filter(d => d.year.toString() === selectedYear);
@@ -710,6 +859,69 @@
         const maxNet = dashData.length ? Math.max(...dashData.map(d => d.netPay)) : 0;
         return { dashboardData: dashData, avgEarnedUAH: avgUAH, avgEarnedForeign: avgForeign, minNetPay: minNet, maxNetPay: maxNet, availableYears: aYears };
       }, [summaryData, selectedYear]);
+
+      const seasonalityData = useMemo(() => {
+        if (summaryData.length === 0) return [];
+        const monthStats = Array.from({ length: 12 }, (_, i) => ({ monthName: MONTH_NAMES[i], shortName: MONTH_NAMES[i].slice(0,3), total: 0, count: 0 }));
+        summaryData.forEach(d => {
+            monthStats[d.month - 1].total += d.netPay;
+            monthStats[d.month - 1].count += 1;
+        });
+        return monthStats.map(m => ({
+            month: m.shortName,
+            fullMonth: m.monthName,
+            average: m.count > 0 ? Math.round(m.total / m.count) : 0,
+            count: m.count
+        }));
+      }, [summaryData]);
+
+      const seasonalityInsights = useMemo(() => {
+        const validMonths = seasonalityData.filter(d => d.average > 0);
+        if (validMonths.length < 3) return null; 
+        
+        const best = [...validMonths].sort((a,b) => b.average - a.average)[0];
+        const worst = [...validMonths].sort((a,b) => a.average - b.average)[0];
+        
+        if (best.average > 0 && ((best.average - worst.average) / best.average) < 0.05) return null;
+
+        return { best, worst };
+      }, [seasonalityData]);
+
+      const flatRows = useMemo(() => {
+        const rows = []; let currentYear = null;
+        dashboardData.forEach(row => {
+          if (selectedYear === 'all' && row.year !== currentYear) {
+            rows.push({ type: 'header', id: `header-${row.year}`, year: row.year });
+            currentYear = row.year;
+          }
+          rows.push({ type: 'data', id: row.id, row });
+        });
+        return rows;
+      }, [dashboardData, selectedYear]);
+
+      const ROW_HEIGHT = 74; // Приблизна висота рядка даних у пікселях
+      const HEADER_HEIGHT = 44; // Приблизна висота заголовка року
+      const OVERSCAN = 250; // Буферна зона рендеру (невидимі елементи зверху та знизу)
+
+      const { virtualItems, totalHeight } = useMemo(() => {
+        let currentTop = 0;
+        const positions = flatRows.map(item => {
+           const h = item.type === 'header' ? HEADER_HEIGHT : ROW_HEIGHT;
+           const pos = { ...item, top: currentTop, height: h };
+           currentTop += h;
+           return pos;
+        });
+
+        const startIdx = positions.findIndex(p => p.top + p.height > scrollTop - OVERSCAN);
+        const endIdx = positions.findIndex(p => p.top > scrollTop + 600 + OVERSCAN);
+
+        const start = Math.max(0, startIdx !== -1 ? startIdx : 0);
+        const end = endIdx !== -1 ? endIdx : positions.length - 1;
+
+        return { virtualItems: positions.slice(start, end + 1), totalHeight: currentTop };
+      }, [flatRows, scrollTop]);
+
+      const handleTableScroll = (e) => setScrollTop(e.target.scrollTop);
 
       if (dbData.length === 0) {
         return (
@@ -721,7 +933,11 @@
             <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">Немає збережених даних</h2>
             <p className="text-slate-500 dark:text-slate-400 max-w-md mb-8">База даних порожня. Додайте свій перший розрахунковий лист, або завантажте ваш файл <b>salaryData.json</b> через меню зліва.</p>
             <div className="flex flex-col sm:flex-row gap-3 items-center">
-              <motion.button whileTap={{ scale: 0.95 }} onClick={() => handleTabChange('add')} className="px-6 py-3 font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-md flex items-center gap-2"><IconPlus /> Додати дані</motion.button>
+              {/* ДОДАНО: Інтерактивний тур (Пульсуюче кільце для фокусу уваги) */}
+              <motion.button whileTap={{ scale: 0.95 }} onClick={() => handleTabChange('add')} className="relative px-6 py-3 font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-md flex items-center gap-2">
+                 <span className="absolute inset-0 rounded-xl ring-4 ring-blue-500/40 animate-pulse"></span>
+                 <IconPlus /> Додати дані
+              </motion.button>
               <motion.button whileTap={{ scale: 0.95 }} onClick={generateDummyData} className="px-6 py-3 font-bold text-slate-700 bg-white border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors"><IconDatabase /> Демо-дані</motion.button>
             </div>
           </motion.div>
@@ -746,13 +962,13 @@
             yoyAvgNode = (
               <div className="mt-2 flex flex-wrap items-center text-xs font-medium gap-2">
                 <span className="text-slate-400">до середнього за {prevYear} рік:</span>
-                <span className={`flex items-center px-2 py-0.5 rounded-md border ${isPositive ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800' : 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800'}`}>
+                <span className={`font-mono flex items-center px-2 py-0.5 rounded-md border ${isPositive ? 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800' : 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-800'}`}>
                   {isPositive ? '+' : ''}{percent.toFixed(1)}%
                   <svg className="w-3 h-3 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isPositive ? "M5 10l7-7m0 0l7 7m-7-7v18" : "M19 14l-7 7m0 0l-7-7m7 7V3"} />
                   </svg>
                 </span>
-                <span className="text-slate-400">({isPositive ? '+' : ''}<PrivacyText text={formatCurrency(diff)} />)</span>
+                <span className="font-mono text-slate-400">({isPositive ? '+' : ''}<PrivacyText text={formatCurrency(diff)} />)</span>
               </div>
             );
           }
@@ -764,23 +980,42 @@
         handleTabChange('payslips');
       };
 
-      const renderTableRows = () => {
-        const rows = []; let currentYear = null;
-        dashboardData.forEach((row, index) => {
-          if (selectedYear === 'all' && row.year !== currentYear) {
-            rows.push(<tr key={`year-${row.year}`} className="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700"><td colSpan="5" className="px-6 py-2.5 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">{row.year} рік</td></tr>);
-            currentYear = row.year;
+      const renderVirtualRows = () => {
+        const rows = [];
+        
+        // Верхній пустий рядок (створює правильну висоту скролу)
+        const topSpacerHeight = virtualItems.length > 0 ? virtualItems[0].top : 0;
+        if (topSpacerHeight > 0) rows.push(<tr key="top-spacer" style={{ height: topSpacerHeight }}><td colSpan="5"></td></tr>);
+
+        virtualItems.forEach((item) => {
+          if (item.type === 'header') {
+            rows.push(<tr key={item.id} className="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 backdrop-blur-sm"><td colSpan="5" className="px-6 py-2.5 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">{item.year} рік</td></tr>);
+          } else {
+            const row = item.row;
+            rows.push(
+              // ДОДАНО: Мікроінтеракції (плавний hover:bg та видимість кнопок тільки при наведенні `group`)
+              <motion.tr variants={tableRowVariants} key={row.id} className="hover:bg-blue-50/60 dark:hover:bg-slate-700/50 transition-colors duration-300 ease-in-out border-b border-slate-100 dark:border-slate-700/50 last:border-0 group">
+                <td className="px-6 py-4 font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap"><div className="flex items-center gap-2"><span>{row.monthName} <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">{selectedYear !== 'all' ? row.year : ''}</span></span>{row.hasVacation && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800">ВІДПУСТКА</span>}</div></td>
+                <td className="px-6 py-4 text-right font-bold tabular-nums whitespace-nowrap font-mono tracking-tight" style={getTextColorGradient(row.netPay, minNetPay, maxNetPay, theme)}><PrivacyText text={formatCurrency(row.netPay)} /></td>
+                <td className="px-6 py-4 text-blue-600 dark:text-blue-400 font-bold tabular-nums text-right whitespace-nowrap font-mono tracking-tight"><span title={`Курс: ${Number(row.exchangeRate).toFixed(2)}`} className="border-b border-dashed border-blue-200 dark:border-blue-800/50 pb-0.5 cursor-help"><PrivacyText text={formatCurrency(row.foreignEquivalent, 'USD')} /></span></td>
+                <td className="px-6 py-4 text-center tabular-nums whitespace-nowrap font-mono">{row.calculatedBonusPercent ? <span className="font-bold text-purple-600 dark:text-purple-400">{row.calculatedBonusPercent}</span> : <span className="text-slate-300 dark:text-slate-600">-</span>}</td>
+                <td className="px-6 py-4 text-center whitespace-nowrap">
+                  {/* Кнопки приховані за замовчуванням на десктопі, з'являються плавно */}
+                  <div className="flex items-center justify-center gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity duration-300">
+                    <button onClick={() => { setSelectedMonthId(row.id); handleTabChange('payslips'); }} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-semibold text-sm transition-colors bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 px-3 py-1.5 rounded-lg">Корінець</button>
+                    <button onClick={() => startEditing(row.id)} className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 p-1.5 rounded-lg transition-colors" title="Редагувати"><IconEdit /></button>
+                    <ConfirmDeleteButton onConfirm={() => deletePayslip(row.id)} />
+                  </div>
+                </td>
+              </motion.tr>
+            );
           }
-          rows.push(
-            <motion.tr variants={tableRowVariants} key={row.id} className="hover:bg-blue-50/50 dark:hover:bg-slate-700/30 transition-colors border-b border-slate-100 dark:border-slate-700/50 last:border-0">
-              <td className="px-6 py-4 font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap"><div className="flex items-center gap-2"><span>{row.monthName} <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">{selectedYear !== 'all' ? row.year : ''}</span></span>{row.hasVacation && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800">ВІДПУСТКА</span>}</div></td>
-              <td className="px-6 py-4 text-right font-bold tabular-nums whitespace-nowrap" style={getTextColorGradient(row.netPay, minNetPay, maxNetPay, theme)}><PrivacyText text={formatCurrency(row.netPay)} /></td>
-              <td className="px-6 py-4 text-blue-600 dark:text-blue-400 font-bold text-right tabular-nums whitespace-nowrap"><span title={`Курс: ${Number(row.exchangeRate).toFixed(2)}`} className="border-b border-dashed border-blue-200 dark:border-blue-800/50 pb-0.5 cursor-help"><PrivacyText text={formatCurrency(row.foreignEquivalent, 'USD')} /></span></td>
-              <td className="px-6 py-4 text-center whitespace-nowrap">{row.calculatedBonusPercent ? <span className="font-bold text-purple-600 dark:text-purple-400 tabular-nums">{row.calculatedBonusPercent}</span> : <span className="text-slate-300 dark:text-slate-600">-</span>}</td>
-              <td className="px-6 py-4 text-center whitespace-nowrap"><div className="flex items-center justify-center gap-2"><button onClick={() => { setSelectedMonthId(row.id); handleTabChange('payslips'); }} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-semibold text-sm transition-colors bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 px-3 py-1.5 rounded-lg">Корінець</button><button onClick={() => startEditing(row.id)} className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 p-1.5 rounded-lg transition-colors" title="Редагувати"><IconEdit /></button><ConfirmDeleteButton onConfirm={() => deletePayslip(row.id)} /></div></td>
-            </motion.tr>
-          );
         });
+
+        // Нижній пустий рядок
+        const bottomSpacerHeight = virtualItems.length > 0 ? totalHeight - (virtualItems[virtualItems.length - 1].top + virtualItems[virtualItems.length - 1].height) : 0;
+        if (bottomSpacerHeight > 0) rows.push(<tr key="bottom-spacer" style={{ height: bottomSpacerHeight }}><td colSpan="5"></td></tr>);
+
         return rows;
       };
 
@@ -798,7 +1033,7 @@
                 </div>
                 <div className="px-3 py-2 flex items-center gap-1.5">
                   <span className="text-xs font-medium text-emerald-600/70 dark:text-emerald-400/70">курс:</span>
-                  {isLoadingRate ? <Skeleton className="h-4 w-12" /> : <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">{liveRate ? `${liveRate.toFixed(2)} ₴` : '—'}</span>}
+                  {isLoadingRate ? <Skeleton className="h-4 w-12" /> : <span className="font-mono text-sm font-bold tracking-tight text-emerald-700 dark:text-emerald-400">{liveRate ? `${liveRate.toFixed(2)} ₴` : '—'}</span>}
                   {isOfflineRate && rateTimestamp && (
                     <span title={`Офлайн режим. Останній курс збережено: ${new Date(rateTimestamp).toLocaleString('uk-UA')}`} className="ml-1 flex items-center text-amber-500 bg-amber-50 dark:bg-amber-900/30 p-1 rounded-md cursor-help">
                       <IconAlert />
@@ -859,7 +1094,9 @@
               )}
             </div>
             {dashboardData.length > 1 ? (
-              <DashboardChart data={dashboardData} showYearInLabels={selectedYear === 'all'} theme={theme} mode={chartMode} isPrivateMode={isPrivateMode} currencySymbol={currencySymbol} onPointClick={handleChartPointClick} /> 
+              <WidgetErrorBoundary>
+                <DashboardChart data={dashboardData} showYearInLabels={selectedYear === 'all'} theme={theme} mode={chartMode} isPrivateMode={isPrivateMode} currencySymbol={currencySymbol} onPointClick={handleChartPointClick} /> 
+              </WidgetErrorBoundary>
             ) : (
               <div className="h-64 flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 mx-2">
                 <IconAreaChart /><p className="mt-3 text-sm font-medium">Додайте дані хоча б за два місяці для побудови графіка</p>
@@ -867,15 +1104,62 @@
             )}
           </div>
 
+          {summaryData.length > 2 && seasonalityInsights && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 transition-colors">
+              <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col justify-between">
+                  <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-2">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-500"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                      Сезонність доходів
+                  </h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Усереднений чистий дохід по місяцях за весь час</p>
+                  <div className="h-[280px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                          <RadarChart cx="50%" cy="50%" outerRadius="75%" data={seasonalityData}>
+                              <PolarGrid stroke={theme === 'dark' ? '#334155' : '#e2e8f0'} />
+                              <PolarAngleAxis dataKey="month" tick={{ fill: theme === 'dark' ? '#94a3b8' : '#64748b', fontSize: 11, fontWeight: 600, fontFamily: 'Inter' }} />
+                              <PolarRadiusAxis angle={30} domain={[0, 'auto']} tick={false} axisLine={false} />
+                              <Radar name="Середній дохід" dataKey="average" stroke="#a855f7" strokeWidth={2} fill="#a855f7" fillOpacity={0.3} isAnimationActive={true} />
+                              <RechartsTooltip content={<CustomRadarTooltip />} cursor={false} />
+                          </RadarChart>
+                      </ResponsiveContainer>
+                  </div>
+              </div>
+              
+              <div className="lg:col-span-1 bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 p-5 md:p-6 rounded-2xl shadow-sm border border-purple-100 dark:border-purple-800/30 flex flex-col justify-center transition-colors">
+                   <h3 className="text-sm font-bold text-purple-900 dark:text-purple-300 mb-4 uppercase tracking-wider">Аналіз патернів</h3>
+                   
+                   <div className="space-y-4">
+                       <div className="bg-white/60 dark:bg-slate-800/50 backdrop-blur-sm p-4 rounded-xl border border-white dark:border-slate-700/50 shadow-sm">
+                           <div className="flex items-center gap-2 mb-1.5">
+                               <span className="text-xl">📈</span>
+                               <span className="font-semibold text-slate-700 dark:text-slate-200">Піковий місяць</span>
+                           </div>
+                           <p className="text-sm text-slate-600 dark:text-slate-400 leading-snug">Історично <strong className="text-slate-800 dark:text-slate-100">{seasonalityInsights.best.fullMonth}</strong> приносить найбільший середній дохід (<span className="font-mono text-purple-600 dark:text-purple-400 font-bold">{formatCurrency(seasonalityInsights.best.average)}</span>).</p>
+                       </div>
+                       
+                       <div className="bg-white/60 dark:bg-slate-800/50 backdrop-blur-sm p-4 rounded-xl border border-white dark:border-slate-700/50 shadow-sm">
+                           <div className="flex items-center gap-2 mb-1.5">
+                               <span className="text-xl">📉</span>
+                               <span className="font-semibold text-slate-700 dark:text-slate-200">Спад активності</span>
+                           </div>
+                           <p className="text-sm text-slate-600 dark:text-slate-400 leading-snug">Найменш прибутковим у середньому є <strong className="text-slate-800 dark:text-slate-100">{seasonalityInsights.worst.fullMonth}</strong> (<span className="font-mono text-slate-600 dark:text-slate-400 font-bold">{formatCurrency(seasonalityInsights.worst.average)}</span>).</p>
+                       </div>
+                   </div>
+              </div>
+            </div>
+          )}
+
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors">
             <div className="p-5 md:p-6 border-b border-slate-100 dark:border-slate-700"><h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Зведена таблиця</h2></div>
-            <div className="overflow-x-auto overflow-y-auto max-h-[600px] no-scrollbar">
+            {/* ДОДАНО: onScroll для віртуалізації */}
+            <div className="overflow-x-auto overflow-y-auto max-h-[600px] no-scrollbar relative" onScroll={handleTableScroll}>
               <table className="w-full text-left text-sm relative">
-                <thead className="bg-slate-50 dark:bg-slate-900/90 text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-20 backdrop-blur-sm">
+                {/* ДОДАНО: backdrop-blur для липкого хедера таблиці */}
+                <thead className="bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur-md text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-30">
                   <tr><th className="px-6 py-4 font-semibold whitespace-nowrap">Місяць</th><th className="px-6 py-4 font-bold text-emerald-600 dark:text-emerald-500 text-right whitespace-nowrap">Зарплата</th><th className="px-6 py-4 font-bold text-blue-600 dark:text-blue-500 text-right whitespace-nowrap">USD ({currencySymbol})</th><th className="px-6 py-4 font-semibold text-center whitespace-nowrap">Премія</th><th className="px-6 py-4 font-semibold text-center whitespace-nowrap">Дія</th></tr>
                 </thead>
                 <motion.tbody variants={tableContainerVariants} initial="hidden" animate="show">
-                  {renderTableRows()}
+                  {renderVirtualRows()}
                 </motion.tbody>
               </table>
             </div>
@@ -885,9 +1169,24 @@
     };
 
     const PayslipView = () => {
-      const { summaryData, dbData, selectedMonthId, setSelectedMonthId, startEditing } = useSalaryContext();
+      const { summaryData, selectedMonthId, setSelectedMonthId, startEditing } = useSalaryContext();
       const activeMonthData = summaryData.find(m => m.id === selectedMonthId) || summaryData[0];
       const [showMath, setShowMath] = useState(false);
+
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          if (!activeMonthData) return;
+          const currentIndex = summaryData.findIndex(m => m.id === activeMonthData.id);
+          
+          if (e.key === 'ArrowLeft' && currentIndex < summaryData.length - 1) {
+             setSelectedMonthId(summaryData[currentIndex + 1].id);
+          } else if (e.key === 'ArrowRight' && currentIndex > 0) {
+             setSelectedMonthId(summaryData[currentIndex - 1].id);
+          }
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+      }, [summaryData, activeMonthData, setSelectedMonthId]);
 
       if (!activeMonthData) return <div className="flex justify-center items-center h-64 text-slate-400">Немає даних.</div>;
 
@@ -938,16 +1237,58 @@
 
       const activeIndex = summaryData.findIndex(m => m.id === activeMonthData.id);
       const prevMonthData = summaryData[activeIndex + 1];
+      const nextMonthData = summaryData[activeIndex - 1];
       const lastYearMonthData = summaryData.find(m => m.month === activeMonthData.month && m.year === activeMonthData.year - 1);
       
+      // --- ДОДАНО: Генерація Інсайтів (Аномалії та Рекорди) ---
+      const insights = useMemo(() => {
+        if (!activeMonthData || summaryData.length < 2) return [];
+        
+        const results = [];
+        const pastData = summaryData.filter(d => d.id !== activeMonthData.id);
+        
+        // 1. Рекордний дохід
+        const maxNetPay = Math.max(...summaryData.map(d => d.netPay));
+        if (activeMonthData.netPay === maxNetPay && maxNetPay > 0) {
+          results.push({ id: 'net-record', type: 'positive', icon: '🏆', text: 'Ви отримали рекордний чистий дохід за весь час!' });
+        }
+        
+        // 2. Рекордні податки
+        const maxTaxes = Math.max(...summaryData.map(d => d.taxes));
+        if (activeMonthData.taxes === maxTaxes && maxTaxes > 0 && pastData.length > 0) {
+          results.push({ id: 'tax-record', type: 'neutral', icon: '🏛️', text: `Заплачено рекордну суму податків — ${formatCurrency(maxTaxes)}.` });
+        }
+        
+        // 3. Аналіз премії
+        const monthsWithBonuses = pastData.filter(d => d.totalBonuses > 0);
+        if (activeMonthData.totalBonuses > 0 && monthsWithBonuses.length > 0) {
+          const avgBonus = monthsWithBonuses.reduce((sum, d) => sum + d.totalBonuses, 0) / monthsWithBonuses.length;
+          const diffPercent = ((activeMonthData.totalBonuses - avgBonus) / avgBonus) * 100;
+          
+          if (diffPercent > 15) {
+            results.push({ id: 'bonus-high', type: 'positive', icon: '🎉', text: `Ваша премія на ${Math.round(diffPercent)}% вища за середню!` });
+          } else if (diffPercent < -15) {
+            results.push({ id: 'bonus-low', type: 'warning', icon: '📉', text: `Премія цього місяця на ${Math.round(Math.abs(diffPercent))}% нижча за звичайну.` });
+          }
+        }
+        
+        // 4. Вартість години
+        const maxHourly = Math.max(...summaryData.map(d => d.hourlyRate));
+        if (activeMonthData.hourlyRate === maxHourly && maxHourly > 0 && pastData.length > 0) {
+          results.push({ id: 'hourly-record', type: 'positive', icon: '⏱️', text: 'Вартість вашої робочої години досягла історичного максимуму.' });
+        }
+        
+        return results;
+      }, [activeMonthData, summaryData]);
+
       let diffNode = null;
       if (prevMonthData) {
         const diff = activeMonthData.netPay - prevMonthData.netPay;
         const percent = prevMonthData.netPay > 0 ? (diff / prevMonthData.netPay) * 100 : 0;
         diffNode = (
           <div className="mt-3 flex items-center justify-center md:justify-end gap-2 text-sm font-medium">
-            {diff > 0 && <span className="flex items-center text-emerald-600 bg-emerald-400/10 px-2.5 py-1 rounded-lg border border-emerald-400/20 dark:text-emerald-400"><svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg><AnimatedNumber value={Math.abs(diff)} currency="UAH" /> <span className="ml-1.5 opacity-80 text-xs">({percent.toFixed(1)}%)</span></span>}
-            {diff < 0 && <span className="flex items-center text-rose-600 bg-rose-400/10 px-2.5 py-1 rounded-lg border border-rose-400/20 dark:text-rose-400"><svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg><AnimatedNumber value={Math.abs(diff)} currency="UAH" /><span className="ml-1.5 opacity-80 text-xs">({Math.abs(percent).toFixed(1)}%)</span></span>}
+            {diff > 0 && <span className="flex items-center text-emerald-600 bg-emerald-400/10 px-2.5 py-1 rounded-lg border border-emerald-400/20 dark:text-emerald-400 font-mono tracking-tight"><svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg><AnimatedNumber value={Math.abs(diff)} currency="UAH" /> <span className="ml-1.5 opacity-80 text-xs">({percent.toFixed(1)}%)</span></span>}
+            {diff < 0 && <span className="flex items-center text-rose-600 bg-rose-400/10 px-2.5 py-1 rounded-lg border border-rose-400/20 dark:text-rose-400 font-mono tracking-tight"><svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg><AnimatedNumber value={Math.abs(diff)} currency="UAH" /><span className="ml-1.5 opacity-80 text-xs">({Math.abs(percent).toFixed(1)}%)</span></span>}
             {diff === 0 && <span className="text-slate-400 bg-slate-400/10 px-2.5 py-1 rounded-lg border border-slate-400/20">Без змін</span>}
             <span className="text-slate-500 text-xs ml-1 hidden sm:inline-block">до мин. міс.</span>
           </div>
@@ -959,17 +1300,18 @@
         const yoyDiff = activeMonthData.netPay - lastYearMonthData.netPay;
         const yoyPercent = lastYearMonthData.netPay > 0 ? (yoyDiff / lastYearMonthData.netPay) * 100 : 0;
         yoyNode = (
-          <div className="mt-2 text-xs font-medium flex items-center justify-center md:justify-end gap-1.5 opacity-90">
-             <span className="text-slate-400">YoY ({activeMonthData.monthName} {lastYearMonthData.year}):</span>
+          <div className="mt-2 text-xs font-medium flex items-center justify-center md:justify-end gap-1.5 opacity-90 font-mono">
+             <span className="text-slate-400 font-sans">YoY ({activeMonthData.monthName} {lastYearMonthData.year}):</span>
              {yoyDiff > 0 && <span className="text-emerald-600 dark:text-emerald-400 flex items-center">+{yoyPercent.toFixed(1)}% <svg className="w-3 h-3 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg></span>}
              {yoyDiff < 0 && <span className="text-rose-600 dark:text-rose-400 flex items-center">{yoyPercent.toFixed(1)}% <svg className="w-3 h-3 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg></span>}
-             {yoyDiff === 0 && <span className="text-slate-400">Без змін</span>}
+             {yoyDiff === 0 && <span className="text-slate-400 font-sans">Без змін</span>}
           </div>
         );
       }
 
       return (
         <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-6 max-w-5xl mx-auto pb-12">
+          
           <div className="bg-white dark:bg-slate-800 p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-5 transition-colors">
             <div className="flex items-center space-x-4">
               <div className="bg-blue-600 p-3 rounded-xl text-white shadow-sm"><IconFileText /></div>
@@ -982,8 +1324,45 @@
                 <p className="text-slate-500 dark:text-slate-400 mt-1 text-sm">Детальні нарахування</p>
               </div>
             </div>
-            <CustomSelect value={selectedMonthId} onChange={setSelectedMonthId} options={summaryData.map(m => ({ value: m.id, label: `${m.monthName} ${m.year}` }))} icon={IconCalendar} />
+            
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <button 
+                onClick={() => setSelectedMonthId(prevMonthData.id)} 
+                disabled={!prevMonthData}
+                className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                title="Попередній місяць (Стрілка вліво)"
+              >
+                <IconChevronLeft />
+              </button>
+              <CustomSelect value={selectedMonthId} onChange={setSelectedMonthId} options={summaryData.map(m => ({ value: m.id, label: `${m.monthName} ${m.year}` }))} icon={IconCalendar} />
+              <button 
+                onClick={() => setSelectedMonthId(nextMonthData.id)} 
+                disabled={!nextMonthData}
+                className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                title="Наступний місяць (Стрілка вправо)"
+              >
+                <IconChevronRight />
+              </button>
+            </div>
           </div>
+
+          {/* --- ВІДОБРАЖЕННЯ ІНСАЙТІВ --- */}
+          {insights.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 p-4 md:p-5 rounded-2xl border border-indigo-100 dark:border-indigo-800/30 flex items-start gap-3 md:gap-4 transition-colors">
+              <div className="text-xl md:text-2xl mt-0.5" style={{ filter: 'drop-shadow(0 2px 4px rgba(99, 102, 241, 0.4))' }}>💡</div>
+              <div className="flex-1">
+                <h3 className="text-sm font-bold text-indigo-900 dark:text-indigo-300 mb-2 uppercase tracking-wider">Аналітика місяця</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {insights.map((insight, i) => (
+                    <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }} key={insight.id} className="flex items-start gap-2.5 bg-white/60 dark:bg-slate-800/50 p-3 rounded-xl border border-white dark:border-slate-700/50 shadow-sm backdrop-blur-sm">
+                      <span className="text-base shrink-0">{insight.icon}</span>
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-snug">{insight.text}</span>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-emerald-100 dark:border-emerald-900/30 flex flex-col transition-colors overflow-hidden">
@@ -1000,10 +1379,10 @@
                   </thead>
                   <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
                     {activeMonthData.accruals.map((item, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
-                        <td className="px-5 md:px-6 py-3 md:py-4"><div className="flex items-center flex-wrap gap-2"><span className="font-semibold text-slate-800 dark:text-slate-200">{item.name}</span>{item.percent && <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">{item.percent}</span>}</div></td>
-                        <td className="px-3 md:px-4 py-3 md:py-4 text-center text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap">{item.days} / {item.hours}</td>
-                        <td className="px-5 md:px-6 py-3 md:py-4 text-right font-bold text-slate-800 dark:text-slate-200 tabular-nums whitespace-nowrap"><PrivacyText text={formatCurrency(item.amount, 'UAH')} /></td>
+                      <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors duration-300 ease-in-out">
+                        <td className="px-5 md:px-6 py-3 md:py-4"><div className="flex items-center flex-wrap gap-2"><span className="font-semibold text-slate-800 dark:text-slate-200">{item.name}</span>{item.percent && <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold font-mono bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">{item.percent}</span>}</div></td>
+                        <td className="px-3 md:px-4 py-3 md:py-4 text-center text-slate-600 dark:text-slate-400 font-medium font-mono whitespace-nowrap">{item.days} / {item.hours}</td>
+                        <td className="px-5 md:px-6 py-3 md:py-4 text-right font-bold text-slate-800 dark:text-slate-200 font-mono tracking-tight whitespace-nowrap"><PrivacyText text={formatCurrency(item.amount, 'UAH')} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1018,6 +1397,21 @@
                   <AnimatedNumber value={trueDeductionsSum} currency="UAH" />
                 </span>
               </div>
+              
+              {activeMonthData.taxWarnings && activeMonthData.taxWarnings.length > 0 && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 px-5 py-2.5 border-b border-amber-100 dark:border-amber-900/30 text-xs text-amber-800 dark:text-amber-400">
+                  <div className="flex items-start gap-1.5">
+                    <IconAlert />
+                    <div>
+                      <p className="font-bold mb-0.5">Можлива неточність в податках:</p>
+                      <ul className="list-disc list-inside font-mono text-[11px]">
+                        {activeMonthData.taxWarnings.map((w, i) => <li key={i}>{w}</li>)}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex-1 overflow-x-auto no-scrollbar relative pb-2">
                 <table className="w-full text-sm text-left">
                   <thead className="bg-white dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-700 sticky top-0 z-20 backdrop-blur-sm shadow-[0_1px_2px_rgba(0,0,0,0.05)] dark:shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
@@ -1025,9 +1419,9 @@
                   </thead>
                   <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50">
                     {trueDeductions.map((item, idx) => (
-                      <tr key={`tax-${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                      <tr key={`tax-${idx}`} className="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors duration-300 ease-in-out">
                         <td className="px-5 md:px-6 py-3 md:py-4"><div className="font-semibold text-slate-800 dark:text-slate-200">{item.name}</div></td>
-                        <td className="px-5 md:px-6 py-3 md:py-4 text-right font-bold text-slate-800 dark:text-slate-200 tabular-nums whitespace-nowrap"><PrivacyText text={formatCurrency(item.amount, 'UAH')} /></td>
+                        <td className="px-5 md:px-6 py-3 md:py-4 text-right font-bold text-slate-800 dark:text-slate-200 font-mono tracking-tight whitespace-nowrap"><PrivacyText text={formatCurrency(item.amount, 'UAH')} /></td>
                       </tr>
                     ))}
                   </tbody>
@@ -1037,9 +1431,9 @@
                         <td colSpan="2" className="px-5 md:px-6 py-2.5 text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-900/60">Фактичні виплати</td>
                       </tr>
                       {payoutItems.map((item, idx) => (
-                        <tr key={`pay-${idx}`} className="hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors">
+                        <tr key={`pay-${idx}`} className="hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors duration-300 ease-in-out">
                           <td className="px-5 md:px-6 py-3 md:py-4"><div className="font-semibold text-slate-700 dark:text-slate-300">{item.name}</div></td>
-                          <td className="px-5 md:px-6 py-3 md:py-4 text-right font-bold text-slate-700 dark:text-slate-300 tabular-nums whitespace-nowrap"><PrivacyText text={formatCurrency(item.amount, 'UAH')} /></td>
+                          <td className="px-5 md:px-6 py-3 md:py-4 text-right font-bold text-slate-700 dark:text-slate-300 font-mono tracking-tight whitespace-nowrap"><PrivacyText text={formatCurrency(item.amount, 'UAH')} /></td>
                         </tr>
                       ))}
                     </tbody>
@@ -1056,21 +1450,23 @@
                   {accrualPieData.length > 0 ? (
                     <>
                       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-0">
-                        <span className="font-black text-slate-800 dark:text-slate-100 text-lg tracking-tight">
+                        <span className="font-black text-slate-800 dark:text-slate-100 text-lg tracking-tight font-mono">
                           <PrivacyText text={formatCurrency(totalAccrualPie, 'UAH')} />
                         </span>
                         <span className="text-xs text-slate-400 font-medium mt-0.5">нараховано</span>
                       </div>
-                      <div className="relative z-10 w-full h-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie data={accrualPieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={4} cornerRadius={5} dataKey="value" stroke="none">
-                              {accrualPieData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
-                            </Pie>
-                            <RechartsTooltip content={<CustomPieTooltip total={totalAccrualPie} />} cursor={{fill: 'transparent'}} wrapperStyle={{ zIndex: 100 }} />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
+                      <WidgetErrorBoundary>
+                        <div className="relative z-10 w-full h-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie data={accrualPieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={4} cornerRadius={5} dataKey="value" stroke="none">
+                                {accrualPieData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
+                              </Pie>
+                              <RechartsTooltip content={<CustomPieTooltip total={totalAccrualPie} />} cursor={{fill: 'transparent'}} wrapperStyle={{ zIndex: 100 }} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </WidgetErrorBoundary>
                     </>
                   ) : <div className="h-full flex items-center justify-center text-slate-400 text-sm">Немає даних</div>}
                 </div>
@@ -1080,7 +1476,7 @@
                     return (
                       <div key={entry.name} className="flex items-center text-xs text-slate-600 dark:text-slate-400 font-medium">
                         <div className="w-3 h-3 rounded-full mr-1.5 shrink-0" style={{backgroundColor: entry.color}}></div>
-                        <span>{entry.name} <span className="opacity-60 ml-0.5">({pct}%)</span></span>
+                        <span>{entry.name} <span className="opacity-60 ml-0.5 font-mono">({pct}%)</span></span>
                       </div>
                     );
                   })}
@@ -1092,21 +1488,23 @@
                   {deductionPieData.length > 0 ? (
                     <>
                       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-0">
-                        <span className="font-black text-slate-800 dark:text-slate-100 text-lg tracking-tight">
+                        <span className="font-black text-slate-800 dark:text-slate-100 text-lg tracking-tight font-mono">
                           <PrivacyText text={formatCurrency(totalDeductionPie, 'UAH')} />
                         </span>
                         <span className="text-xs text-slate-400 font-medium mt-0.5">податки</span>
                       </div>
-                      <div className="relative z-10 w-full h-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie data={deductionPieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={4} cornerRadius={5} dataKey="value" stroke="none">
-                              {deductionPieData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
-                            </Pie>
-                            <RechartsTooltip content={<CustomPieTooltip total={totalDeductionPie} />} cursor={{fill: 'transparent'}} wrapperStyle={{ zIndex: 100 }} />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
+                      <WidgetErrorBoundary>
+                        <div className="relative z-10 w-full h-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie data={deductionPieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={4} cornerRadius={5} dataKey="value" stroke="none">
+                                {deductionPieData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
+                              </Pie>
+                              <RechartsTooltip content={<CustomPieTooltip total={totalDeductionPie} />} cursor={{fill: 'transparent'}} wrapperStyle={{ zIndex: 100 }} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </WidgetErrorBoundary>
                     </>
                   ) : <div className="h-full flex items-center justify-center text-slate-400 text-sm">Немає даних</div>}
                 </div>
@@ -1116,7 +1514,7 @@
                     return (
                       <div key={entry.name} className="flex items-center text-xs text-slate-600 dark:text-slate-400 font-medium">
                         <div className="w-3 h-3 rounded-full mr-1.5 shrink-0" style={{backgroundColor: entry.color}}></div>
-                        <span>{entry.name} <span className="opacity-60 ml-0.5">({pct}%)</span></span>
+                        <span>{entry.name} <span className="opacity-60 ml-0.5 font-mono">({pct}%)</span></span>
                       </div>
                     );
                   })}
@@ -1139,7 +1537,7 @@
                 <p className="text-sm text-slate-400 mt-1 text-left hidden md:block">Зароблено після податків (включає аванс).</p>
               </div>
               <div className="bg-slate-900/50 px-6 py-4 rounded-xl border border-slate-700 w-full md:w-auto text-center flex flex-col justify-center shadow-inner">
-                <div className="text-3xl md:text-4xl font-black text-emerald-400 tracking-tight tabular-nums">
+                <div className="text-3xl md:text-4xl font-black text-emerald-400 tracking-tight">
                   <AnimatedNumber value={activeMonthData.netPay} currency="UAH" />
                 </div>
                 {diffNode}
@@ -1154,29 +1552,29 @@
                     <div className="max-w-2xl mx-auto md:mx-0 bg-slate-800/50 rounded-xl border border-slate-700/50 p-4 md:p-5 text-sm md:text-base">
                       <div className="flex justify-between items-center pb-3 border-b border-slate-700/50">
                         <div className="flex flex-col"><span className="text-slate-300 font-medium">Сумарні нарахування</span></div>
-                        <span className="text-emerald-400 font-bold tabular-nums">+<PrivacyText text={formatCurrency(activeMonthData.totalAccrued, 'UAH')} /></span>
+                        <span className="text-emerald-400 font-bold font-mono tracking-tight">+<PrivacyText text={formatCurrency(activeMonthData.totalAccrued, 'UAH')} /></span>
                       </div>
                       <div className="flex justify-between items-center py-3 border-b border-slate-700/50">
                         <div className="flex flex-col"><span className="text-slate-300 font-medium">Сумарні утримання</span><span className="text-xs text-slate-500">Податки, збори</span></div>
-                        <span className="text-rose-400 font-bold tabular-nums">-<PrivacyText text={formatCurrency(taxSum, 'UAH')} /></span>
+                        <span className="text-rose-400 font-bold font-mono tracking-tight">-<PrivacyText text={formatCurrency(taxSum, 'UAH')} /></span>
                       </div>
                       <div className="flex justify-between items-center py-3 border-b border-slate-700/50">
                         <div className="flex flex-col"><span className="text-slate-300 font-medium">Вже виплачено</span><span className="text-xs text-slate-500">Аванси</span></div>
-                        <span className="text-slate-300 font-bold tabular-nums"><PrivacyText text={formatCurrency(advanceSum, 'UAH')} /></span>
+                        <span className="text-slate-300 font-bold font-mono tracking-tight"><PrivacyText text={formatCurrency(advanceSum, 'UAH')} /></span>
                       </div>
                       {activeMonthData.prevMonthVacationPayout > 0 && (
                         <div className="flex justify-between items-center py-3 border-b border-slate-700/50">
                           <div className="flex flex-col"><span className="text-slate-300 font-medium">Відпускні з минулого місяця</span><span className="text-xs text-slate-500">Плюсуються до поточного доходу</span></div>
-                          <span className="text-emerald-400 font-bold tabular-nums">+<PrivacyText text={formatCurrency(activeMonthData.prevMonthVacationPayout, 'UAH')} /></span>
+                          <span className="text-emerald-400 font-bold font-mono tracking-tight">+<PrivacyText text={formatCurrency(activeMonthData.prevMonthVacationPayout, 'UAH')} /></span>
                         </div>
                       )}
                       <div className="flex justify-between items-center pt-3 pb-4">
                         <div className="flex flex-col"><span className="text-slate-300 font-medium">До виплати</span><span className="text-xs text-slate-500">Залишок на карту</span></div>
-                        <span className="text-slate-300 font-bold tabular-nums"><PrivacyText text={formatCurrency(activeMonthData.toBank, 'UAH')} /></span>
+                        <span className="text-slate-300 font-bold font-mono tracking-tight"><PrivacyText text={formatCurrency(activeMonthData.toBank, 'UAH')} /></span>
                       </div>
                       <div className="flex justify-between items-center py-4 border-t border-slate-700/50 bg-slate-800/40 -mx-4 md:-mx-5 -mb-4 md:-mb-5 px-4 md:px-5 rounded-b-xl shadow-inner">
                         <div className="flex flex-col"><span className="text-white font-bold text-lg">Чистий дохід</span></div>
-                        <span className="text-emerald-400 font-black text-xl tabular-nums"><PrivacyText text={formatCurrency(activeMonthData.netPay, 'UAH')} /></span>
+                        <span className="text-emerald-400 font-black text-xl font-mono tracking-tight"><PrivacyText text={formatCurrency(activeMonthData.netPay, 'UAH')} /></span>
                       </div>
                     </div>
                   </div>
@@ -1189,13 +1587,25 @@
     };
 
     const AddPayslipView = () => {
-      const { dbData, setDbData, setSelectedMonthId, handleTabChange, showToast, isFormDirty, setIsFormDirty, editingPayslip, setEditingPayslip } = useSalaryContext();
+      // ДОДАНО: hasSeenImportHint з контексту
+      const { dbData, setDbData, setSelectedMonthId, handleTabChange, showToast, isFormDirty, setIsFormDirty, editingPayslip, setEditingPayslip, hasSeenImportHint, setHasSeenImportHint } = useSalaryContext();
       
       const [monthIdx, setMonthIdx] = useState(0); const [year, setYear] = useState(''); const [pastedText, setPastedText] = useState('');
       const [accruals, setAccruals] = useState([]); const [deductions, setDeductions] = useState([]);
       const [overwriteConfirm, setOverwriteConfirm] = useState(null);
       
       const [parserPreviewData, setParserPreviewData] = useState(null);
+
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          if (e.key === 'Escape') {
+            if (parserPreviewData) setParserPreviewData(null);
+            if (overwriteConfirm) setOverwriteConfirm(null);
+          }
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+      }, [parserPreviewData, overwriteConfirm]);
 
       useEffect(() => {
         const handleBeforeUnloadForm = (e) => {
@@ -1223,6 +1633,19 @@
       const currentAccrued = accruals.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
       const currentDeducted = deductions.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
       const currentNet = currentAccrued - currentDeducted;
+      
+      const calcPdfo = currentAccrued * 0.18;
+      const vzRate = Number(year) <= 2024 ? 0.015 : 0.05;
+      const calcVz = currentAccrued * vzRate;
+      let actualPdfo = 0; let actualVz = 0;
+      
+      deductions.forEach(d => {
+        const lowerName = (d.name || '').toLowerCase();
+        if (lowerName.includes('податок') || lowerName.includes('пдфо')) actualPdfo += Number(d.amount || 0);
+        if (lowerName.includes('військов') || lowerName.includes('вз')) actualVz += Number(d.amount || 0);
+      });
+      
+      const showTaxWarning = (actualPdfo > 0 && Math.abs(actualPdfo - calcPdfo) > 5) || (actualVz > 0 && Math.abs(actualVz - calcVz) > 5);
 
       const markDirty = () => setIsFormDirty(true);
       const handleAddAccrual = () => { setAccruals([...accruals, { id: generateId(), name: '', percent: '', days: 0, hours: '0:0', amount: '' }]); markDirty(); };
@@ -1232,11 +1655,20 @@
 
       const handleParseAttempt = () => {
         if (!pastedText.trim()) return;
+        
         const result = ParserModule.parseTextPayslip(pastedText, false);
         if (result.success) {
-          setParserPreviewData(result);
+          setHasSeenImportHint(true); // Успішно спарсили — приховуємо підказку назавжди
+          const tempAcc = result.accruals.reduce((s, i) => s + i.amount, 0);
+          const tempDed = result.deductions.reduce((s, i) => s + i.amount, 0);
+          
+          let hasSuspiciousData = false;
+          if (tempAcc === 0 && tempDed > 0) hasSuspiciousData = true;
+          
+          setParserPreviewData({ ...result, hasSuspiciousData, tempAcc, tempDed });
         } else { 
           showToast("Не вдалося розпізнати дані. Перевірте формат.", "error"); 
+          setParserPreviewData(null);
         }
       };
 
@@ -1256,6 +1688,13 @@
 
       const handleFormSubmit = (e) => {
         e.preventDefault();
+        
+        // ДОДАНО: Жорсткий захист від від'ємного чистого доходу
+        if (currentNet < 0) {
+           showToast("Помилка: Чистий дохід не може бути від'ємним. Перевірте суми утримань.", "error");
+           return;
+        }
+
         const monthId = `${year}-${String(monthIdx + 1).padStart(2, '0')}`; 
         const cleanedAccruals = cleanDataList(accruals); const cleanedDeductions = cleanDataList(deductions);
         if(cleanedAccruals.length === 0 && cleanedDeductions.length === 0) { showToast("Форма порожня або містить некоректні дані.", "error"); return; }
@@ -1280,16 +1719,18 @@
           
           <AnimatePresence>
             {parserPreviewData && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-                <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-2xl w-full p-6 border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
-                  <div className="flex items-center justify-between mb-4">
+              // ДОДАНО: Glassmorphism для бекграунду та самого модального вікна
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
+                <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="bg-white/95 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-[0_0_40px_rgba(0,0,0,0.2)] dark:shadow-[0_0_40px_rgba(0,0,0,0.5)] max-w-2xl w-full p-6 border border-white/20 dark:border-slate-700/50 max-h-[90vh] flex flex-col">
+                  <div className="flex items-center justify-between mb-4 shrink-0">
                     <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2"><IconCheck /> Попередній перегляд імпорту</h3>
                     <button onClick={() => setParserPreviewData(null)} className="p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors"><IconX /></button>
                   </div>
                   
-                  <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">Ось що нам вдалося розпізнати з вашого тексту. Перевірте дані перед додаванням до форми.</p>
+                  <div className="overflow-y-auto pr-2 no-scrollbar flex-1">
+                    <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">Ось що нам вдалося розпізнати з вашого тексту. Перевірте дані перед додаванням до форми.</p>
 
-                  {parserPreviewData.period && (
+                    {parserPreviewData.hasSuspiciousData && (
                     <div className="mb-4 flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 p-3 rounded-xl border border-blue-100 dark:border-blue-800/50">
                       <IconCalendar /> <span className="font-semibold text-blue-800 dark:text-blue-300">Визначений період:</span> <span className="font-bold text-blue-900 dark:text-blue-200">{MONTH_NAMES[parserPreviewData.period.monthIdx]} {parserPreviewData.period.year}</span>
                     </div>
@@ -1297,31 +1738,32 @@
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="bg-emerald-50 dark:bg-emerald-900/10 rounded-xl p-4 border border-emerald-100 dark:border-emerald-900/30">
-                      <h4 className="font-bold text-emerald-800 dark:text-emerald-400 border-b border-emerald-200 dark:border-emerald-800/50 pb-2 mb-3">Знайдено нарахувань: {parserPreviewData.accruals.length}</h4>
-                      <ul className="space-y-2 text-sm max-h-[300px] overflow-y-auto pr-2">
+                      <h4 className="font-bold text-emerald-800 dark:text-emerald-400 border-b border-emerald-200 dark:border-emerald-800/50 pb-2 mb-3 font-mono tracking-tight">Нарахування: {formatCurrency(parserPreviewData.tempAcc, 'UAH')}</h4>
+                      <ul className="space-y-2 text-sm">
                         {parserPreviewData.accruals.map((a, i) => (
                           <li key={i} className="flex justify-between items-center border-b border-emerald-100/50 dark:border-emerald-800/30 pb-1">
                             <span className="text-slate-700 dark:text-slate-300 truncate mr-2" title={a.name}>{a.name}</span>
-                            <span className="font-bold text-emerald-700 dark:text-emerald-400 tabular-nums shrink-0">{formatCurrency(a.amount, 'UAH')}</span>
+                            <span className="font-bold text-emerald-700 dark:text-emerald-400 font-mono tracking-tight shrink-0">{formatCurrency(a.amount, 'UAH')}</span>
                           </li>
                         ))}
                       </ul>
                     </div>
                     
                     <div className="bg-rose-50 dark:bg-rose-900/10 rounded-xl p-4 border border-rose-100 dark:border-rose-900/30">
-                      <h4 className="font-bold text-rose-800 dark:text-rose-400 border-b border-rose-200 dark:border-rose-800/50 pb-2 mb-3">Знайдено утримань: {parserPreviewData.deductions.length}</h4>
-                      <ul className="space-y-2 text-sm max-h-[300px] overflow-y-auto pr-2">
+                      <h4 className="font-bold text-rose-800 dark:text-rose-400 border-b border-rose-200 dark:border-rose-800/50 pb-2 mb-3 font-mono tracking-tight">Утримання: {formatCurrency(parserPreviewData.tempDed, 'UAH')}</h4>
+                      <ul className="space-y-2 text-sm">
                         {parserPreviewData.deductions.map((d, i) => (
                           <li key={i} className="flex justify-between items-center border-b border-rose-100/50 dark:border-rose-800/30 pb-1">
                             <span className="text-slate-700 dark:text-slate-300 truncate mr-2" title={d.name}>{d.name}</span>
-                            <span className="font-bold text-rose-700 dark:text-rose-400 tabular-nums shrink-0">{formatCurrency(d.amount, 'UAH')}</span>
+                            <span className="font-bold text-rose-700 dark:text-rose-400 font-mono tracking-tight shrink-0">{formatCurrency(d.amount, 'UAH')}</span>
                           </li>
                         ))}
                       </ul>
                     </div>
                   </div>
+                  </div>
 
-                  <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 shrink-0">
                     <button type="button" onClick={() => setParserPreviewData(null)} className="px-5 py-2.5 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">Скасувати</button>
                     <button type="button" onClick={confirmParserPreview} className="px-6 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition shadow-sm">Застосувати у форму</button>
                   </div>
@@ -1332,8 +1774,9 @@
 
           <AnimatePresence>
             {overwriteConfirm && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-                <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
+              // ДОДАНО: Glassmorphism
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
+                <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white/95 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 border border-white/20 dark:border-slate-700/50">
                   <div className="flex items-center gap-3 text-amber-600 dark:text-amber-500 mb-4"><div className="bg-amber-100 dark:bg-amber-900/30 p-2 rounded-full"><IconAlert /></div><h3 className="text-xl font-bold">Оновлення даних</h3></div>
                   <p className="text-slate-600 dark:text-slate-300 mb-6">Розрахунковий лист за <b>{overwriteConfirm.monthName} {overwriteConfirm.year}</b> вже існує. Бажаєте перезаписати старі дані?</p>
                   <div className="flex justify-end gap-3">
@@ -1348,9 +1791,23 @@
           {!editingPayslip ? (
             <div className="bg-white dark:bg-slate-800 p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 transition-colors">
               <div className="mb-4"><h2 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-slate-100 mb-1">Імпорт даних</h2><p className="text-slate-500 dark:text-slate-400 text-xs md:text-sm">Вставте скопійований текст розрахункового листа</p></div>
-              <div className="bg-blue-50 dark:bg-blue-900/20 p-4 md:p-5 rounded-xl border border-blue-100 dark:border-blue-800/50 transition-colors">
+              <div className="relative bg-blue-50 dark:bg-blue-900/20 p-4 md:p-5 rounded-xl border border-blue-100 dark:border-blue-800/50 transition-colors">
+                
+                {/* ДОДАНО: Інтерактивний тултип-онбордінг (Contextual Onboarding) */}
+                {!hasSeenImportHint && pastedText.length === 0 && (
+                  <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="absolute -top-14 sm:-top-12 left-4 z-10 bg-indigo-900/80 dark:bg-indigo-900/90 backdrop-blur-md text-white p-2.5 sm:p-3 rounded-xl border border-white/20 shadow-2xl flex items-center gap-3">
+                    <span className="text-xl animate-bounce">💡</span>
+                    <div className="text-sm">
+                      <p className="font-bold">Як це працює?</p>
+                      <p className="opacity-90 text-xs hidden sm:block">Скопіюйте текст із PDF чи Excel (Ctrl+C) і вставте сюди (Ctrl+V).</p>
+                    </div>
+                    <button type="button" onClick={() => setHasSeenImportHint(true)} className="ml-1 bg-white/20 hover:bg-white/30 text-white px-2 py-1 rounded text-xs font-bold transition-colors">Зрозумів</button>
+                    <div className="absolute -bottom-2 left-6 w-4 h-4 bg-indigo-900/80 dark:bg-indigo-900/90 backdrop-blur-md border-b border-r border-white/20 transform rotate-45"></div>
+                  </motion.div>
+                )}
+
                 <div className="flex flex-col md:flex-row gap-3">
-                  <textarea value={pastedText} onChange={(e) => setPastedText(e.target.value)} placeholder="Вставте сюди текст розрахункового листа..." className="flex-1 h-20 md:h-24 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-700 text-slate-800 dark:text-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-colors" />
+                  <textarea value={pastedText} onChange={(e) => setPastedText(e.target.value)} placeholder="Вставте сюди текст розрахункового листа..." className="flex-1 h-20 md:h-24 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-700 text-slate-800 dark:text-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-colors relative z-0" />
                   <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={handleParseAttempt} disabled={!pastedText.trim()} className="w-full md:w-32 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm">Розпізнати</motion.button>
                 </div>
               </div>
@@ -1373,7 +1830,7 @@
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Рік</label>
-                  <input type="number" value={year} onChange={e => { setYear(e.target.value); markDirty(); }} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500 transition-colors text-sm md:text-base" required />
+                  <input type="number" value={year} onChange={e => { setYear(e.target.value); markDirty(); }} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-mono rounded-xl p-2.5 outline-none focus:ring-2 focus:ring-blue-500 transition-colors text-sm md:text-base" required />
                 </div>
               </div>
             </div>
@@ -1388,10 +1845,10 @@
                     <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, height: 0, overflow: 'hidden' }} key={item.id} className="flex flex-col md:flex-row gap-2 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50 transition-colors">
                       <input type="text" placeholder="Вид оплати" value={item.name} onChange={e => { const newArr = [...accruals]; newArr[idx].name = e.target.value; setAccruals(newArr); markDirty(); }} className="w-full md:flex-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-lg p-2.5 text-sm transition-colors" required />
                       <div className="grid grid-cols-2 gap-2 md:flex md:w-auto">
-                        <input type="text" placeholder="% (напр. 100%)" value={item.percent || ''} onChange={e => { const newArr = [...accruals]; newArr[idx].percent = e.target.value; setAccruals(newArr); markDirty(); }} className="w-full md:w-24 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-lg p-2.5 text-sm transition-colors" />
-                        <input type="number" placeholder="Дні" value={item.days} onChange={e => { const newArr = [...accruals]; newArr[idx].days = e.target.value; setAccruals(newArr); markDirty(); }} className="w-full md:w-16 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-lg p-2.5 text-sm transition-colors" />
-                        <input type="text" placeholder="Год" value={item.hours} onChange={e => { const newArr = [...accruals]; newArr[idx].hours = e.target.value; setAccruals(newArr); markDirty(); }} className="w-full md:w-20 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-lg p-2.5 text-sm transition-colors" />
-                        <input type="number" step="0.01" inputMode="decimal" placeholder="Сума ₴" value={item.amount} onChange={e => { const newArr = [...accruals]; newArr[idx].amount = e.target.value; setAccruals(newArr); markDirty(); }} className="w-full md:w-28 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-emerald-700 dark:text-emerald-400 rounded-lg p-2.5 text-sm font-bold transition-colors" required />
+                        <input type="text" placeholder="% (напр. 100%)" value={item.percent || ''} onChange={e => { const newArr = [...accruals]; newArr[idx].percent = e.target.value; setAccruals(newArr); markDirty(); }} className="w-full md:w-24 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-mono rounded-lg p-2.5 text-sm transition-colors" />
+                        <input type="number" placeholder="Дні" value={item.days} onChange={e => { const newArr = [...accruals]; newArr[idx].days = e.target.value; setAccruals(newArr); markDirty(); }} className="w-full md:w-16 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-mono rounded-lg p-2.5 text-sm transition-colors" />
+                        <input type="text" placeholder="Год" value={item.hours} onChange={e => { const newArr = [...accruals]; newArr[idx].hours = e.target.value; setAccruals(newArr); markDirty(); }} className="w-full md:w-20 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-mono rounded-lg p-2.5 text-sm transition-colors" />
+                        <input type="number" step="0.01" inputMode="decimal" placeholder="Сума ₴" value={item.amount} onChange={e => { const newArr = [...accruals]; newArr[idx].amount = e.target.value; setAccruals(newArr); markDirty(); }} className="w-full md:w-28 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-emerald-700 dark:text-emerald-400 font-mono rounded-lg p-2.5 text-sm font-bold transition-colors" required />
                       </div>
                       <button type="button" onClick={() => removeAccrual(item.id)} className="w-full md:w-auto p-2.5 flex justify-center text-rose-500 bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/20 dark:hover:bg-rose-900/40 rounded-lg transition mt-2 md:mt-0"><IconTrash /></button>
                     </motion.div>
@@ -1400,41 +1857,56 @@
               </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 p-3 md:p-6 rounded-2xl shadow-sm border border-rose-200 dark:border-slate-700 transition-colors">
+            <div className={`bg-white dark:bg-slate-800 p-3 md:p-6 rounded-2xl shadow-sm border transition-colors ${showTaxWarning ? 'border-amber-300 dark:border-amber-700/50' : 'border-rose-200 dark:border-slate-700'}`}>
               <div className="flex justify-between items-center mb-4 px-2 md:px-0">
-                <h3 className="text-base md:text-lg font-bold text-rose-800 dark:text-rose-400">Утримано</h3><button type="button" onClick={handleAddDeduction} className="flex items-center gap-1 text-sm font-medium text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/30 px-3 py-1.5 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/50 transition"><IconPlus /> Додати</button>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base md:text-lg font-bold text-rose-800 dark:text-rose-400">Утримано</h3>
+                  {showTaxWarning && <span className="text-amber-600 bg-amber-50 dark:bg-amber-900/20 p-1 rounded" title="Введені податки не збігаються з розрахунковими"><IconAlert /></span>}
+                </div>
+                <button type="button" onClick={handleAddDeduction} className="flex items-center gap-1 text-sm font-medium text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/30 px-3 py-1.5 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/50 transition"><IconPlus /> Додати</button>
               </div>
+              
+              {showTaxWarning && (
+                <div className="mb-4 text-xs text-amber-600 dark:text-amber-400 px-2">
+                  <strong>Підказка:</strong> Орієнтовний ПДФО — <span className="font-mono">{formatCurrency(calcPdfo)}</span>, ВЗ — <span className="font-mono">{formatCurrency(calcVz)}</span>.
+                </div>
+              )}
+
               <div className="space-y-3">
                 <AnimatePresence>
-                  {deductions.map((item, idx) => (
+                  {deductions.map((item, idx) => {
+                    const isTax = (item.name || '').toLowerCase().includes('податок') || (item.name || '').toLowerCase().includes('військов');
+                    return (
                     <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, height: 0, overflow: 'hidden' }} key={item.id} className="flex flex-col md:flex-row gap-2 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50 transition-colors">
                       <input type="text" placeholder="Вид утримання" value={item.name} onChange={e => { const newArr = [...deductions]; newArr[idx].name = e.target.value; setDeductions(newArr); markDirty(); }} className="w-full md:flex-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-lg p-2.5 text-sm transition-colors" required />
-                      <input type="number" step="0.01" inputMode="decimal" placeholder="Сума ₴" value={item.amount} onChange={e => { const newArr = [...deductions]; newArr[idx].amount = e.target.value; setDeductions(newArr); markDirty(); }} className="w-full md:w-32 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-rose-700 dark:text-rose-400 rounded-lg p-2.5 text-sm font-bold transition-colors" required />
+                      <input type="number" step="0.01" inputMode="decimal" placeholder="Сума ₴" value={item.amount} onChange={e => { const newArr = [...deductions]; newArr[idx].amount = e.target.value; setDeductions(newArr); markDirty(); }} className={`w-full md:w-32 bg-white dark:bg-slate-800 border rounded-lg p-2.5 text-sm font-bold font-mono transition-colors ${showTaxWarning && isTax ? 'border-amber-300 dark:border-amber-600 text-amber-700 dark:text-amber-400' : 'border-slate-200 dark:border-slate-700 text-rose-700 dark:text-rose-400'}`} required />
                       <button type="button" onClick={() => removeDeduction(item.id)} className="w-full md:w-auto p-2.5 flex justify-center text-rose-500 bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/20 dark:hover:bg-rose-900/40 rounded-lg transition mt-2 md:mt-0"><IconTrash /></button>
                     </motion.div>
-                  ))}
+                  )})}
                 </AnimatePresence>
               </div>
             </div>
 
-            <div className="sticky bottom-4 z-40 bg-slate-800 dark:bg-slate-900 text-white p-4 rounded-2xl shadow-xl border border-slate-700 mt-6 md:hidden">
+            <div className={`sticky bottom-4 z-40 bg-slate-800 dark:bg-slate-900 text-white p-4 rounded-2xl shadow-xl border mt-6 md:hidden ${currentNet < 0 ? 'border-rose-500 ring-2 ring-rose-500/50' : 'border-slate-700'}`}>
               <div className="flex justify-between items-center text-sm mb-1">
                 <span className="text-slate-400">Нараховано:</span>
-                <span className="text-emerald-400 font-bold">{formatCurrency(currentAccrued, 'UAH')}</span>
+                <span className="text-emerald-400 font-bold font-mono tracking-tight">{formatCurrency(currentAccrued, 'UAH')}</span>
               </div>
               <div className="flex justify-between items-center text-sm mb-2 border-b border-slate-700 pb-2">
                 <span className="text-slate-400">Утримано:</span>
-                <span className="text-rose-400 font-bold">-{formatCurrency(currentDeducted, 'UAH')}</span>
+                <span className="text-rose-400 font-bold font-mono tracking-tight">-{formatCurrency(currentDeducted, 'UAH')}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="font-bold text-slate-200">Попередньо до виплати:</span>
-                <span className="text-lg font-black text-white">{formatCurrency(currentNet, 'UAH')}</span>
+                <span className={`text-lg font-black font-mono tracking-tight ${currentNet < 0 ? 'text-rose-400' : 'text-white'}`}>{formatCurrency(currentNet, 'UAH')}</span>
               </div>
             </div>
 
             <div className="flex flex-col md:flex-row justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
               <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={() => { if(editingPayslip) setEditingPayslip(null); handleTabChange('dashboard'); }} className="w-full md:w-auto px-6 py-3 font-medium text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-transparent dark:border-slate-700 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition">Скасувати</motion.button>
-              <motion.button whileTap={{ scale: 0.95 }} type="submit" className="w-full md:w-auto px-8 py-3 font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition shadow-md flex items-center justify-center gap-2"><IconCheck /> Зберегти</motion.button>
+              <motion.button whileTap={{ scale: 0.95 }} type="submit" className={`w-full md:w-auto px-8 py-3 font-bold text-white rounded-xl transition shadow-md flex items-center justify-center gap-2 ${currentNet < 0 ? 'bg-rose-500 hover:bg-rose-600' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                {currentNet < 0 ? <IconAlert /> : <IconCheck />} Зберегти
+              </motion.button>
             </div>
           </form>
         </motion.div>
@@ -1444,6 +1916,14 @@
     const Layout = () => {
       const { theme, toggleTheme, isPrivateMode, togglePrivateMode, activeTab, handleTabChange, pendingTab, confirmTabChange, cancelTabChange, dbData, setDbData, generateAndDownloadJSONFile, showToast, hasUnexportedChanges, clearAllData, isMobileMenuOpen, setIsMobileMenuOpen } = useSalaryContext();
       const [isRestoring, setIsRestoring] = useState(false); const [showClearConfirm, setShowClearConfirm] = useState(false); const [isDragging, setIsDragging] = useState(false); const backupInputRef = useRef(null);
+
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          if (e.key === 'Escape' && showClearConfirm) setShowClearConfirm(false);
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+      }, [showClearConfirm]);
 
       const processImportedFile = (file) => {
         setIsRestoring(true); const reader = new FileReader();
@@ -1484,10 +1964,12 @@
 
           <AnimatePresence>
             {pendingTab && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700"><div className="flex items-center gap-3 text-amber-600 dark:text-amber-500 mb-4"><div className="bg-amber-100 dark:bg-amber-900/30 p-2 rounded-full"><IconAlert /></div><h3 className="text-xl font-bold">Незбережені дані</h3></div><p className="text-slate-600 dark:text-slate-300 mb-6">Ви внесли зміни у форму. Якщо ви перейдете на іншу вкладку, незбережені дані будуть втрачені.</p><div className="flex justify-end gap-3 flex-wrap"><button onClick={cancelTabChange} className="px-4 py-2 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">Залишитися</button><button onClick={confirmTabChange} className="px-4 py-2 bg-rose-500 text-white font-bold rounded-xl hover:bg-rose-600 transition shadow-sm">Вийти</button></div></motion.div></motion.div>
+              // ДОДАНО: Glassmorphism
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4"><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white/95 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 border border-white/20 dark:border-slate-700/50"><div className="flex items-center gap-3 text-amber-600 dark:text-amber-500 mb-4"><div className="bg-amber-100 dark:bg-amber-900/30 p-2 rounded-full"><IconAlert /></div><h3 className="text-xl font-bold">Незбережені дані</h3></div><p className="text-slate-600 dark:text-slate-300 mb-6">Ви внесли зміни у форму. Якщо ви перейдете на іншу вкладку, незбережені дані будуть втрачені.</p><div className="flex justify-end gap-3 flex-wrap"><button onClick={cancelTabChange} className="px-4 py-2 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">Залишитися</button><button onClick={confirmTabChange} className="px-4 py-2 bg-rose-500 text-white font-bold rounded-xl hover:bg-rose-600 transition shadow-sm">Вийти</button></div></motion.div></motion.div>
             )}
             {showClearConfirm && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4"><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700"><div className="flex items-center gap-3 text-rose-600 dark:text-rose-500 mb-4"><div className="bg-rose-100 dark:bg-rose-900/30 p-2 rounded-full"><IconAlert /></div><h3 className="text-xl font-bold">Очистити всі дані?</h3></div><p className="text-slate-600 dark:text-slate-300 mb-6">Ви збираєтесь видалити <b>всі розрахункові листи</b> з бази. Цю дію неможливо скасувати.</p><div className="flex justify-end gap-3 flex-wrap"><button onClick={() => setShowClearConfirm(false)} className="px-4 py-2 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">Скасувати</button><button onClick={() => { clearAllData(); setShowClearConfirm(false); }} className="px-4 py-2 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition shadow-sm">Очистити</button></div></motion.div></motion.div>
+              // ДОДАНО: Glassmorphism
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4"><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white/95 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 border border-white/20 dark:border-slate-700/50"><div className="flex items-center gap-3 text-rose-600 dark:text-rose-500 mb-4"><div className="bg-rose-100 dark:bg-rose-900/30 p-2 rounded-full"><IconAlert /></div><h3 className="text-xl font-bold">Очистити всі дані?</h3></div><p className="text-slate-600 dark:text-slate-300 mb-6">Ви збираєтесь видалити <b>всі розрахункові листи</b> з бази. Цю дію неможливо скасувати.</p><div className="flex justify-end gap-3 flex-wrap"><button onClick={() => setShowClearConfirm(false)} className="px-4 py-2 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">Скасувати</button><button onClick={() => { clearAllData(); setShowClearConfirm(false); }} className="px-4 py-2 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition shadow-sm">Очистити</button></div></motion.div></motion.div>
             )}
           </AnimatePresence>
 
@@ -1525,14 +2007,17 @@
               </div>
               <div className="mt-auto pt-8 pb-6">
                 <div className="text-xs font-semibold text-slate-400 dark:text-slate-500 mb-3 px-2 uppercase tracking-wider">Файли та Дані</div>
+                
                 <button onClick={() => generateAndDownloadJSONFile(dbData)} disabled={dbData.length === 0} className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${hasUnexportedChanges ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed'}`}>
                   <div className="flex items-center gap-3"><IconDownload /> Експорт .json</div>
                   {hasUnexportedChanges && <span className="flex h-2.5 w-2.5 relative"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span></span>}
                 </button>
+                
                 <label className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer mt-1 ${isRestoring ? 'text-blue-400 bg-blue-50 dark:bg-blue-900/30' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>
-                  {isRestoring ? <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div> : <IconDatabase />} {isRestoring ? 'Імпорт...' : 'Імпорт .json'}
+                  {isRestoring ? <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div> : <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>} {isRestoring ? 'Імпорт...' : 'Імпорт .json'}
                   <input type="file" accept=".json" className="hidden" onChange={handleImportBackup} ref={backupInputRef} disabled={isRestoring} />
                 </label>
+                
                 <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
                   <button onClick={() => setShowClearConfirm(true)} disabled={dbData.length === 0} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"><IconTrash /> Очистити базу</button>
                 </div>
