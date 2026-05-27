@@ -56,7 +56,7 @@
   <script type="text/babel">
     const { useState, useMemo, useEffect, useRef, createContext, useContext, useCallback } = React;
     const { motion, AnimatePresence, animate } = window.Motion;
-    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip: RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, LabelList, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ReferenceLine } = window.Recharts;
+    const { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip: RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, LabelList, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ReferenceLine } = window.Recharts;
 
     const IconWallet = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>;
     const IconCalendar = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>;
@@ -697,36 +697,100 @@
       );
     };
 
-    const CustomRechartsTooltip = ({ active, payload, mode, currencySymbol }) => {
+    const CustomRechartsTooltip = ({ active, payload, mode, currencySymbol, chartData }) => {
       const { isPrivateMode } = useSalaryContext();
       if (active && payload && payload.length) {
         const pointData = payload[0].payload;
+        
+        let momDeltaUAH = null;
+        let momDeltaUSD = null;
+        
+        if (chartData && chartData.length > 0) {
+          const currentIndex = chartData.findIndex(d => d.id === pointData.id);
+          if (currentIndex > 0) {
+            const prevData = chartData[currentIndex - 1];
+            if (mode === 'hourly') {
+              const prevHourly = prevData.hourlyRate || 0;
+              if (prevHourly > 0) momDeltaUAH = ((pointData.hourlyRate - prevHourly) / prevHourly) * 100;
+            } else if (mode === 'bonus') {
+              const prevBonus = prevData.bonusPercentNumeric || 0;
+              momDeltaUAH = pointData.bonusPercentNumeric - prevBonus;
+            } else {
+              const prevNet = prevData.netPay || 0;
+              if (prevNet > 0) momDeltaUAH = ((pointData.netPay - prevNet) / prevNet) * 100;
+              
+              const prevUSD = prevData.foreignEquivalent || 0;
+              if (prevUSD > 0) momDeltaUSD = ((pointData.foreignEquivalent - prevUSD) / prevUSD) * 100;
+            }
+          }
+        }
+
+        const formatDelta = (delta, isPercentagePoint = false) => {
+          if (delta === null || delta === undefined) return null;
+          const isPositive = delta > 0;
+          const formatted = Math.abs(delta).toFixed(1);
+          if (delta === 0) return <span className="text-[10px] text-slate-400 font-bold ml-1.5 font-mono">0.0%</span>;
+          return (
+            <span className={`text-[10px] font-extrabold ml-1.5 font-mono flex items-center gap-0.5 shrink-0 ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {isPositive ? `+${formatted}` : `-${formatted}`}{isPercentagePoint ? 'п.п.' : '%'}
+              {isPositive ? '📈' : '📉'}
+            </span>
+          );
+        };
+
         return (
-          <div className="bg-slate-900/80 dark:bg-slate-900/70 backdrop-blur-md text-white text-xs py-3 px-4 rounded-xl shadow-2xl flex flex-col gap-1.5 border border-white/10 dark:border-slate-600/50 min-w-[150px]">
+          <div className="bg-slate-950/90 dark:bg-slate-900/90 backdrop-blur-md text-white text-xs py-3 px-4 rounded-xl shadow-2xl flex flex-col gap-1.5 border border-slate-700/50 min-w-[170px] z-50 pointer-events-none">
             <div className="font-semibold text-slate-300 mb-1 border-b border-white/10 dark:border-slate-700/50 pb-1.5 flex justify-between items-center">
               <span>{pointData.monthName} {pointData.year}</span>
-              {pointData.hasVacation && <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded ml-2">Відпустка</span>}
+              {pointData.hasVacation && <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded font-black tracking-wider uppercase">Відпустка</span>}
             </div>
             {mode === 'hourly' ? (
               <>
-                <div className="flex justify-between items-center gap-4 mt-1"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-cyan-500"></div><span className="text-slate-400 font-medium">За годину (₴)</span></div><span className="font-bold text-white font-mono">{isPrivateMode ? '***' : formatCurrency(pointData.hourlyRate)}</span></div>
-                <div className="flex justify-between items-center gap-4"><div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-400"></div><span className="text-slate-400 font-medium">За годину ({currencySymbol})</span></div><span className="font-bold text-slate-200 font-mono">{isPrivateMode ? '***' : formatCurrency(pointData.hourlyRateForeign, 'USD')}</span></div>
+                <div className="flex justify-between items-center gap-4 mt-1">
+                  <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-cyan-500 shrink-0"></div><span className="text-slate-400 font-medium">За годину (₴)</span></div>
+                  <div className="flex items-center">
+                    <span className="font-bold text-white font-mono">{isPrivateMode ? '***' : formatCurrency(pointData.hourlyRate)}</span>
+                    {formatDelta(momDeltaUAH)}
+                  </div>
+                </div>
+                <div className="flex justify-between items-center gap-4">
+                  <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-slate-400 shrink-0"></div><span className="text-slate-400 font-medium">За годину ({currencySymbol})</span></div>
+                  <span className="font-bold text-slate-200 font-mono">{isPrivateMode ? '***' : formatCurrency(pointData.hourlyRateForeign, 'USD')}</span>
+                </div>
               </>
             ) : mode === 'bonus' ? (
-              <div className="flex justify-between items-center gap-4 mt-1"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-purple-500"></div><span className="text-slate-400 font-medium">Премія</span></div><span className="font-bold text-white font-mono">{isPrivateMode ? '***' : (pointData.calculatedBonusPercent || '0%')}</span></div>
+              <div className="flex justify-between items-center gap-4 mt-1">
+                <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-purple-500 shrink-0"></div><span className="text-slate-400 font-medium">Премія</span></div>
+                <div className="flex items-center">
+                  <span className="font-bold text-white font-mono">{isPrivateMode ? '***' : (pointData.calculatedBonusPercent || '0%')}</span>
+                  {formatDelta(momDeltaUAH, true)}
+                </div>
+              </div>
             ) : (
               <>
-                <div className="flex justify-between items-center gap-4 mt-1"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div><span className="text-slate-400 font-medium">В гривнях (₴)</span></div><span className="font-bold text-white font-mono">{isPrivateMode ? '***' : formatCurrency(pointData.netPay)}</span></div>
-                <div className="flex justify-between items-center gap-4"><div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-400"></div><span className="text-slate-400 font-medium">USD ({currencySymbol})</span></div><span className="font-bold text-slate-200 font-mono">{isPrivateMode ? '***' : formatCurrency(pointData.foreignEquivalent, 'USD')}</span></div>
+                <div className="flex justify-between items-center gap-4 mt-1">
+                  <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></div><span className="text-slate-400 font-medium">В гривнях (₴)</span></div>
+                  <div className="flex items-center">
+                    <span className="font-bold text-white font-mono">{isPrivateMode ? '***' : formatCurrency(pointData.netPay)}</span>
+                    {formatDelta(momDeltaUAH)}
+                  </div>
+                </div>
+                <div className="flex justify-between items-center gap-4">
+                  <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0"></div><span className="text-slate-400 font-medium">USD ({currencySymbol})</span></div>
+                  <div className="flex items-center">
+                    <span className="font-bold text-slate-200 font-mono">{isPrivateMode ? '***' : formatCurrency(pointData.foreignEquivalent, 'USD')}</span>
+                    {formatDelta(momDeltaUSD)}
+                  </div>
+                </div>
                 {pointData.calculatedBonusPercent && (
                   <div className="flex justify-between items-center gap-4 pt-1.5 mt-0.5 border-t border-slate-700/50 dark:border-slate-600/50">
-                    <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-purple-500"></div><span className="text-slate-400 font-medium">Премія</span></div>
+                    <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-purple-500 shrink-0"></div><span className="text-slate-400 font-medium">Премія</span></div>
                     <span className="font-bold text-purple-400 font-mono">{isPrivateMode ? '***' : pointData.calculatedBonusPercent}</span>
                   </div>
                 )}
               </>
             )}
-            <div className="text-[10px] text-slate-500 italic mt-1.5 text-center border-t border-slate-700/50 dark:border-slate-600/50 pt-1.5">Клікніть для деталей</div>
+            <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mt-1 text-center border-t border-slate-700/50 pt-1.5 select-none">Клікніть на точку для детального корінця</div>
           </div>
         );
       }
@@ -881,7 +945,24 @@
         let bonusTicks = getTicks('bonusPercentNumeric', 4, true); if (bonusTicks[bonusTicks.length - 1] < 100) bonusTicks = [0, 25, 50, 75, 100];
         return (
           <div style={{ width: '100%', height: 320, cursor: 'pointer' }}>
-            <ResponsiveContainer><LineChart onClick={handleChartClick} data={chartData} margin={{ top: 35, right: 15, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} /><XAxis dataKey="id" padding={{ left: 20, right: 20 }} tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} /><YAxis dataKey="bonusPercentNumeric" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : `${val}%`} domain={[bonusTicks[0], bonusTicks[bonusTicks.length - 1]]} ticks={bonusTicks} width={45} /><RechartsTooltip content={<CustomRechartsTooltip mode="bonus" currencySymbol={currencySymbol} />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} />{renderYearMarkers()}<Line type="monotone" dataKey="bonusPercentNumeric" name="Премія (%)" stroke="#a855f7" strokeWidth={3} dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#a855f7', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#a855f7', strokeWidth: 0 }} isAnimationActive={true}><LabelList dataKey="bonusPercentNumeric" content={(props) => <CustomChartLabel {...props} dataKey="bonusPercentNumeric" />}/></Line></LineChart></ResponsiveContainer>
+            <ResponsiveContainer>
+              <AreaChart onClick={handleChartClick} data={chartData} margin={{ top: 35, right: 15, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorBonus" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#a855f7" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#a855f7" stopOpacity={0.0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} />
+                <XAxis dataKey="id" padding={{ left: 20, right: 20 }} tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} />
+                <YAxis dataKey="bonusPercentNumeric" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : `${val}%`} domain={[bonusTicks[0], bonusTicks[bonusTicks.length - 1]]} ticks={bonusTicks} width={45} />
+                <RechartsTooltip content={<CustomRechartsTooltip mode="bonus" currencySymbol={currencySymbol} chartData={chartData} />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} />
+                {renderYearMarkers()}
+                <Area type="monotone" dataKey="bonusPercentNumeric" name="Премія (%)" stroke="#a855f7" strokeWidth={3} fill="url(#colorBonus)" dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#a855f7', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#a855f7', strokeWidth: 0 }} isAnimationActive={true}>
+                  <LabelList dataKey="bonusPercentNumeric" content={(props) => <CustomChartLabel {...props} dataKey="bonusPercentNumeric" />}/>
+                </Area>
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         );
       }
@@ -889,7 +970,30 @@
         const uahTicks = getTicks('hourlyRate', 4); const foreignTicks = getTicks('hourlyRateForeign', 4);
         return (
           <div style={{ width: '100%', height: 320, cursor: 'pointer' }}>
-            <ResponsiveContainer><LineChart onClick={handleChartClick} data={chartData} margin={{ top: 35, right: 0, left: 5, bottom: 0 }}><defs><linearGradient id="colorHourly" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#06b6d4" stopOpacity={1}/><stop offset="100%" stopColor="#3b82f6" stopOpacity={1}/></linearGradient></defs><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} /><XAxis dataKey="id" padding={{ left: 20, right: 20 }} tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} /><YAxis yAxisId="left" dataKey="hourlyRate" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : formatCurrency(val)} domain={[uahTicks[0], uahTicks[uahTicks.length - 1]]} ticks={uahTicks} width={85} /><YAxis yAxisId="right" orientation="right" dataKey="hourlyRateForeign" axisLine={false} tickLine={false} tick={{ fill: tickFill, opacity: 0.7, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : `${val} ${currencySymbol}`} domain={[foreignTicks[0], foreignTicks[foreignTicks.length - 1]]} ticks={foreignTicks} width={75} /><RechartsTooltip content={<CustomRechartsTooltip mode="hourly" currencySymbol={currencySymbol} />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} />{renderYearMarkers('left')}<Line yAxisId="left" type="monotone" dataKey="hourlyRate" name="Гривні/год (₴)" stroke="url(#colorHourly)" strokeWidth={3} dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#06b6d4', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#06b6d4', strokeWidth: 0 }} isAnimationActive={true}><LabelList dataKey="hourlyRate" content={(props) => <CustomChartLabel {...props} dataKey="hourlyRate" />}/></Line><Line yAxisId="right" type="monotone" dataKey="hourlyRateForeign" name={`USD/год (${currencySymbol})`} stroke={tickFill} strokeWidth={1.5} strokeDasharray="6 6" dot={{ r: 2, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: tickFill }} activeDot={{ r: 4, fill: tickFill, strokeWidth: 0 }} isAnimationActive={true} /></LineChart></ResponsiveContainer>
+            <ResponsiveContainer>
+              <AreaChart onClick={handleChartClick} data={chartData} margin={{ top: 35, right: 0, left: 5, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorHourly" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#06b6d4" stopOpacity={1}/>
+                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={1}/>
+                  </linearGradient>
+                  <linearGradient id="colorHourlyBg" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} />
+                <XAxis dataKey="id" padding={{ left: 20, right: 20 }} tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} />
+                <YAxis yAxisId="left" dataKey="hourlyRate" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : formatCurrency(val)} domain={[uahTicks[0], uahTicks[uahTicks.length - 1]]} ticks={uahTicks} width={85} />
+                <YAxis yAxisId="right" orientation="right" dataKey="hourlyRateForeign" axisLine={false} tickLine={false} tick={{ fill: tickFill, opacity: 0.7, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : `${val} ${currencySymbol}`} domain={[foreignTicks[0], foreignTicks[foreignTicks.length - 1]]} ticks={foreignTicks} width={75} />
+                <RechartsTooltip content={<CustomRechartsTooltip mode="hourly" currencySymbol={currencySymbol} chartData={chartData} />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} />
+                {renderYearMarkers('left')}
+                <Area yAxisId="left" type="monotone" dataKey="hourlyRate" name="Гривні/год (₴)" stroke="url(#colorHourly)" strokeWidth={3} fill="url(#colorHourlyBg)" dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#06b6d4', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#06b6d4', strokeWidth: 0 }} isAnimationActive={true}>
+                  <LabelList dataKey="hourlyRate" content={(props) => <CustomChartLabel {...props} dataKey="hourlyRate" />}/>
+                </Area>
+                <Line yAxisId="right" type="monotone" dataKey="hourlyRateForeign" name={`USD/год (${currencySymbol})`} stroke={tickFill} strokeWidth={1.5} strokeDasharray="6 6" dot={{ r: 2, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: tickFill }} activeDot={{ r: 4, fill: tickFill, strokeWidth: 0 }} isAnimationActive={true} />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         );
       }
@@ -897,7 +1001,31 @@
       const uahTicks = getTicks('netPay', 4); const foreignTicks = getTicks('foreignEquivalent', 4);
       return (
         <div style={{ width: '100%', height: 320, cursor: 'pointer' }}>
-          <ResponsiveContainer><LineChart onClick={handleChartClick} data={chartData} margin={{ top: 35, right: 0, left: 5, bottom: 0 }}><defs><linearGradient id="colorUah" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10b981" stopOpacity={1}/><stop offset="50%" stopColor="#f59e0b" stopOpacity={1}/><stop offset="100%" stopColor="#ef4444" stopOpacity={1}/></linearGradient></defs><CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} /><XAxis dataKey="id" padding={{ left: 20, right: 20 }} tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} /><YAxis yAxisId="left" dataKey="netPay" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : formatCurrency(val)} domain={[uahTicks[0], uahTicks[uahTicks.length - 1]]} ticks={uahTicks} width={85} /><YAxis yAxisId="right" orientation="right" dataKey="foreignEquivalent" axisLine={false} tickLine={false} tick={{ fill: tickFill, opacity: 0.7, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : `${val} ${currencySymbol}`} domain={[foreignTicks[0], foreignTicks[foreignTicks.length - 1]]} ticks={foreignTicks} width={75} /><RechartsTooltip content={<CustomRechartsTooltip mode="income" currencySymbol={currencySymbol} />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} />{renderYearMarkers('left')}<Line yAxisId="left" type="monotone" dataKey="netPay" name="В гривнях (₴)" stroke="url(#colorUah)" strokeWidth={3} dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#10b981', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#10b981', strokeWidth: 0 }} isAnimationActive={true}><LabelList dataKey="netPay" content={(props) => <CustomChartLabel {...props} dataKey="netPay" />}/></Line><Line yAxisId="right" type="monotone" dataKey="foreignEquivalent" name={`USD (${currencySymbol})`} stroke={tickFill} strokeWidth={1.5} strokeDasharray="6 6" dot={{ r: 2, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: tickFill }} activeDot={{ r: 4, fill: tickFill, strokeWidth: 0 }} isAnimationActive={true} /></LineChart></ResponsiveContainer>
+          <ResponsiveContainer>
+            <AreaChart onClick={handleChartClick} data={chartData} margin={{ top: 35, right: 0, left: 5, bottom: 0 }}>
+              <defs>
+                <linearGradient id="colorUah" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={1}/>
+                  <stop offset="50%" stopColor="#f59e0b" stopOpacity={1}/>
+                  <stop offset="100%" stopColor="#ef4444" stopOpacity={1}/>
+                </linearGradient>
+                <linearGradient id="colorUahBg" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
+                  <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="4 4" vertical={false} stroke={gridStroke} />
+              <XAxis dataKey="id" padding={{ left: 20, right: 20 }} tickFormatter={(val) => { const item = chartData.find(d => d.id === val); return item ? `${item.monthName.slice(0, 3)}${showYearInLabels ? ` '${String(item.year).slice(2)}` : ''}` : val; }} axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} dy={10} />
+              <YAxis yAxisId="left" dataKey="netPay" axisLine={false} tickLine={false} tick={{ fill: tickFill, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : formatCurrency(val)} domain={[uahTicks[0], uahTicks[uahTicks.length - 1]]} ticks={uahTicks} width={85} />
+              <YAxis yAxisId="right" orientation="right" dataKey="foreignEquivalent" axisLine={false} tickLine={false} tick={{ fill: tickFill, opacity: 0.7, fontSize: 12, fontWeight: 500 }} tickFormatter={(val) => isPrivateMode ? '***' : `${val} ${currencySymbol}`} domain={[foreignTicks[0], foreignTicks[foreignTicks.length - 1]]} ticks={foreignTicks} width={75} />
+              <RechartsTooltip content={<CustomRechartsTooltip mode="income" currencySymbol={currencySymbol} chartData={chartData} />} cursor={{ stroke: tooltipCursor, strokeWidth: 1, strokeDasharray: '4 4' }} />
+              {renderYearMarkers('left')}
+              <Area yAxisId="left" type="monotone" dataKey="netPay" name="В гривнях (₴)" stroke="url(#colorUah)" strokeWidth={3} fill="url(#colorUahBg)" dot={{ r: 4, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: '#10b981', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#10b981', strokeWidth: 0 }} isAnimationActive={true}>
+                <LabelList dataKey="netPay" content={(props) => <CustomChartLabel {...props} dataKey="netPay" />}/>
+              </Area>
+              <Line yAxisId="right" type="monotone" dataKey="foreignEquivalent" name={`USD (${currencySymbol})`} stroke={tickFill} strokeWidth={1.5} strokeDasharray="6 6" dot={{ r: 2, fill: theme === 'dark' ? '#1e293b' : '#fff', stroke: tickFill }} activeDot={{ r: 4, fill: tickFill, strokeWidth: 0 }} isAnimationActive={true} />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
       );
     });
@@ -2107,9 +2235,28 @@
             )}
           </AnimatePresence>
 
-          <div className="md:hidden bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between z-30">
-            <div className="flex items-center space-x-2"><div className="bg-blue-600 p-1.5 rounded-lg text-white"><IconWallet /></div><h1 className="text-lg font-bold">SalaryHub</h1></div>
-            <div className="flex items-center gap-2"><button onClick={toggleTheme} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">{theme === 'dark' ? <IconSun /> : <IconMoon />}</button><button onClick={togglePrivateMode} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">{isPrivateMode ? <IconEyeOff /> : <IconEye />}</button><button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"><IconMenu /></button></div>
+          <div className="md:hidden bg-white/70 dark:bg-slate-800/70 backdrop-blur-md border-b border-slate-200/40 dark:border-slate-700/40 px-4 py-3 flex items-center justify-between z-30 sticky top-0">
+            <div className="flex items-center space-x-2">
+              <motion.div whileHover={{ scale: 1.1, rotate: [0, -5, 5, -5, 0] }} className="bg-blue-600 p-1.5 rounded-lg text-white">
+                <IconWallet />
+              </motion.div>
+              <h1 className="text-lg font-bold">SalaryHub</h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <motion.button whileTap={{ scale: 0.9 }} onClick={toggleTheme} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.div key={theme} initial={{ rotate: -90, scale: 0.8, opacity: 0 }} animate={{ rotate: 0, scale: 1, opacity: 1 }} exit={{ rotate: 90, scale: 0.8, opacity: 0 }} transition={{ duration: 0.2 }}>
+                    {theme === 'dark' ? <IconSun /> : <IconMoon />}
+                  </motion.div>
+                </AnimatePresence>
+              </motion.button>
+              <motion.button whileTap={{ scale: 0.9 }} onClick={togglePrivateMode} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">
+                {isPrivateMode ? <IconEyeOff /> : <IconEye />}
+              </motion.button>
+              <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">
+                <IconMenu />
+              </button>
+            </div>
           </div>
 
           <AnimatePresence>
@@ -2123,26 +2270,36 @@
 
           {isMobileMenuOpen && <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 md:hidden" onClick={() => setIsMobileMenuOpen(false)}></div>}
 
-          <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+          <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white/70 dark:bg-slate-800/70 backdrop-blur-md border-r border-slate-200/40 dark:border-slate-700/40 flex flex-col transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
             <div className="p-5 md:p-6 flex items-center justify-between gap-2 md:mb-6">
               <div className="hidden md:flex items-center gap-2.5 min-w-0">
-                <div className="bg-blue-600 p-2 rounded-lg text-white shrink-0"><IconWallet /></div>
+                <motion.div whileHover={{ scale: 1.1, rotate: [0, -5, 5, -5, 0] }} transition={{ duration: 0.4 }} className="bg-blue-600 p-2 rounded-lg text-white shrink-0">
+                  <IconWallet />
+                </motion.div>
                 <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 truncate">SalaryHub</h1>
               </div>
               <div className="md:hidden flex items-center w-full justify-between"><div className="flex items-center space-x-2"><div className="bg-blue-600 p-1.5 rounded-lg text-white"><IconWallet /></div><span className="font-bold text-lg">Меню</span></div><button onClick={() => setIsMobileMenuOpen(false)} className="p-2 bg-slate-100 dark:bg-slate-700 rounded-full"><IconX /></button></div>
               <div className="hidden md:flex items-center gap-1.5 shrink-0">
-                <button onClick={toggleTheme} className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-50 dark:bg-slate-700/50 rounded-lg transition-colors">{theme === 'dark' ? <IconSun /> : <IconMoon />}</button>
-                <button onClick={togglePrivateMode} className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-50 dark:bg-slate-700/50 rounded-lg transition-colors">{isPrivateMode ? <IconEyeOff /> : <IconEye />}</button>
+                <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={toggleTheme} className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-50 dark:bg-slate-700/50 rounded-lg transition-colors">
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.div key={theme} initial={{ rotate: -90, scale: 0.8, opacity: 0 }} animate={{ rotate: 0, scale: 1, opacity: 1 }} exit={{ rotate: 90, scale: 0.8, opacity: 0 }} transition={{ duration: 0.2 }}>
+                      {theme === 'dark' ? <IconSun /> : <IconMoon />}
+                    </motion.div>
+                  </AnimatePresence>
+                </motion.button>
+                <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={togglePrivateMode} className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-50 dark:bg-slate-700/50 rounded-lg transition-colors">
+                  {isPrivateMode ? <IconEyeOff /> : <IconEye />}
+                </motion.button>
               </div>
             </div>
             
             <nav className="space-y-2 flex-1 flex flex-col px-4 md:px-6 overflow-y-auto no-scrollbar">
               <div className="space-y-2">
-                <motion.button whileTap={{ scale: 0.95 }} onClick={() => handleTabChange('dashboard')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all text-left ${activeTab === 'dashboard' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>
+                <motion.button whileHover={{ x: 4 }} whileTap={{ scale: 0.98 }} onClick={() => handleTabChange('dashboard')} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all text-left ${activeTab === 'dashboard' ? 'bg-blue-50/80 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-semibold border border-blue-100/50 dark:border-blue-800/30 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'}`}>
                   <span className="shrink-0"><IconActivity /></span>
                   <span className="truncate whitespace-normal leading-tight">Головна</span>
                 </motion.button>
-                <motion.button whileTap={{ scale: 0.95 }} onClick={() => { if (dbData.length > 0) handleTabChange('payslips'); }} disabled={dbData.length === 0} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all text-left ${activeTab === 'payslips' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed'}`}>
+                <motion.button whileHover={{ x: 4 }} whileTap={{ scale: 0.98 }} onClick={() => { if (dbData.length > 0) handleTabChange('payslips'); }} disabled={dbData.length === 0} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all text-left ${activeTab === 'payslips' ? 'bg-blue-50/80 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-semibold border border-blue-100/50 dark:border-blue-800/30 shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed'}`}>
                   <span className="shrink-0"><IconFileText /></span>
                   <span className="truncate whitespace-normal leading-tight">Розрахункові листи</span>
                 </motion.button>
