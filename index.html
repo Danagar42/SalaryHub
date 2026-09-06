@@ -80,6 +80,7 @@
     const IconAreaChart = () => <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>;
     const IconChevronLeft = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>;
     const IconChevronRight = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>;
+    const IconSuitcase = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>;
 
     const MONTH_NAMES = ["Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень", "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень"];
 
@@ -224,7 +225,7 @@
     };
 
     const ParserModule = {
-      accrualKeywords: ['оклад', 'премі', 'відпустк', 'лікар', 'лікарнян', 'лікарн', 'листок непрацездатності', 'непрацездатн', 'доплат', 'надбавк', 'надб', 'компенсаці', 'індексаці', 'оплат', 'допомог', 'відрядж', 'мобілізован', 'матеріал', 'інші'],
+      accrualKeywords: ['оклад', 'премі', 'відпуст', 'лікарн', 'непрацездатн', 'доплат', 'надбавк', 'надб', 'компенсац', 'індексац', 'оплат', 'допомог', 'відрядж', 'мобілізован', 'матеріал', 'інші', 'донор'],
       deductionKeywords: ['аванс', 'податок', 'пдфо', 'збір', 'внеск', 'виплачено', 'виплачені', 'виплата', 'виплат', 'утриманн', 'перерахуванн', 'картк', 'банк', 'проф', 'алімент', 'борг', 'зсу', 'благодійн', 'виконавч', 'о/р', 'вз'],
 
       cleanNumberString: (val) => String(val ?? '').replace(/[\s\u00A0]+/g, '').replace(',', '.'),
@@ -302,8 +303,8 @@
         if (amountIdx === -1) return 0;
         for (let i = startIdx; i < amountIdx; i++) {
           if (ParserModule.isAmount(row[i])) {
-            const n = ParserModule.parseNum(row[i]);
-            if (Number.isInteger(n) && n >= 0 && n <= 31) return n;
+             const n = ParserModule.parseNum(row[i]);
+             if (Number.isInteger(n) && n >= 0 && n <= 31) return n;
           }
         }
         return 0;
@@ -321,6 +322,8 @@
         const accruals = [];
         const deductions = [];
         let period = null;
+        let totalAccruedControl = null;
+        let totalDeductedControl = null;
 
         const isAccrual = (c) => { 
           const lower = String(c ?? '').toLowerCase();
@@ -356,6 +359,16 @@
           if (!Array.isArray(row)) return;
           const cells = row.map(c => typeof c === 'string' ? c.trim() : c);
           if (!cells.some(c => c != null && c !== '')) return;
+          
+          const fullRowText = cells.filter(c => c != null && c !== '').join(' ').toLowerCase();
+          if (fullRowText.includes('разом нараховано')) {
+             const m = fullRowText.match(/разом нараховано\s*[-:]?\s*(\d[\d\s]*[,.]\d+)/);
+             if (m) totalAccruedControl = ParserModule.parseNum(m[1]);
+          }
+          if (fullRowText.includes('разом утримано')) {
+             const m = fullRowText.match(/разом утримано\s*[-:]?\s*(\d[\d\s]*[,.]\d+)/);
+             if (m) totalDeductedControl = ParserModule.parseNum(m[1]);
+          }
 
           const accIdx = cells.findIndex(c => typeof c === 'string' && isAccrual(c));
           const dedIdx = cells.findIndex((c, i) => typeof c === 'string' && isDeduction(c) && i !== accIdx);
@@ -386,7 +399,7 @@
         });
 
         // Повертаємо rawRows для fallback-інтерфейсу візуального маппінгу
-        return { success: accruals.length > 0 || deductions.length > 0, accruals, deductions, period, rawRows: rows };
+        return { success: accruals.length > 0 || deductions.length > 0, accruals, deductions, period, rawRows: rows, totalAccruedControl, totalDeductedControl };
       },
 
       parseTextPayslip: (text) => {
@@ -432,6 +445,7 @@
       
       const [activeTab, setActiveTab] = useState('dashboard');
       const [selectedMonthId, setSelectedMonthId] = useState(null);
+      const [smoothingMode, setSmoothingMode] = useLocalStorage('salaryHubSmoothingMode', 'smoothed');
       
       const [isFormDirty, setIsFormDirty] = useState(false);
       const [pendingTab, setPendingTab] = useState(null);
@@ -515,7 +529,7 @@
       const summaryData = useMemo(() => {
         const sortedDbData = [...dbData].sort((a, b) => b.id.localeCompare(a.id)); 
         
-        return sortedDbData.map((month, index, array) => {
+        const baseData = sortedDbData.map((month, index, array) => {
           const validAccruals = month.accruals.filter(a => !a.name.toLowerCase().match(/виплачен[оі].*відпускн/)).map(a => {
                if (a.name.toLowerCase().includes('надб') && a.name.toLowerCase().includes('стаж') && a.name.toLowerCase().includes('енерг')) return { ...a, name: 'Надбавка за стаж в енергетиці' };
                return a;
@@ -556,13 +570,20 @@
           }
 
           const advanceSum = validDeductions.filter(d => d.name.toLowerCase().match(/аванс/)).reduce((sum, item) => sum + Number(item.amount), 0);
-          const payoutSum = validDeductions.filter(d => d.name.toLowerCase().match(/виплат|виплачено/)).reduce((sum, item) => sum + Number(item.amount), 0);
+          
+          const vacationPayoutDeductions = validDeductions.filter(d => d.name.toLowerCase().match(/виплачен[оі].*(відпускн|лікарнян)/));
+          const vacationPayoutSum = vacationPayoutDeductions.reduce((sum, item) => sum + Number(item.amount), 0);
+          
+          const regularPayoutSum = validDeductions.filter(d => d.name.toLowerCase().match(/виплат|виплачено/) && !d.name.toLowerCase().match(/відпускн|лікарнян/)).reduce((sum, item) => sum + Number(item.amount), 0);
+          const payoutSum = regularPayoutSum + vacationPayoutSum;
+          
           const explicitBankSum = validDeductions.filter(d => d.name.toLowerCase().match(/перерахування|банк|картк|о\/р/)).reduce((sum, item) => sum + Number(item.amount), 0);
           const taxes = validDeductions.filter(d => !d.name.toLowerCase().match(/аванс|виплат|виплачено|перерахування|банк|картк|о\/р/)).reduce((sum, item) => sum + Number(item.amount), 0);
             
           const calculatedBankRemainder = Math.max(totalAccrued - taxes - advanceSum - payoutSum, 0);
           const toBank = explicitBankSum > 0 ? explicitBankSum : calculatedBankRemainder;
-          const netPay = advanceSum + payoutSum + toBank;
+          
+          const rawNetPay = advanceSum + regularPayoutSum + vacationPayoutSum + toBank;
           
           let okladAmount = 0; let okladHours = 0; let stazhAmount = 0;
           
@@ -582,10 +603,9 @@
           const hasVacation = validAccruals.some(a => a.name.toLowerCase().includes('щорічна відпуст'));
 
           const actualRate = historicalRates[month.id] || 40.0;
-          const hourlyRateForeign = hourlyRate / actualRate;
           
           const calcPdfo = totalAccrued * 0.18;
-          const vzRate = month.year <= 2024 ? 0.015 : 0.05; 
+          const vzRate = month.year < 2024 || (month.year === 2024 && month.month < 12) ? 0.015 : 0.05; 
           const calcVz = totalAccrued * vzRate;
           
           let actualPdfo = 0;
@@ -606,13 +626,46 @@
 
           return { 
             ...month, accruals: validAccruals, deductions: validDeductions,
-            totalAccrued, totalDeducted, taxes, netPay, toBank, advanceSum, payoutSum, prevMonthVacationPayout, 
-            totalBonuses, otherBonuses, hasVacation, calculatedBonusPercent, bonusPercentNumeric, hourlyRate, hourlyRateForeign,
-            foreignEquivalent: netPay / actualRate, exchangeRate: actualRate,
+            totalAccrued, totalDeducted, taxes, rawNetPay, toBank, advanceSum, payoutSum, regularPayoutSum, vacationPayoutSum, prevMonthVacationPayout, 
+            totalBonuses, otherBonuses, hasVacation, calculatedBonusPercent, bonusPercentNumeric, hourlyRate,
+            exchangeRate: actualRate,
             taxWarnings
           };
         });
-      }, [dbData, historicalRates]);
+
+        const smoothedData = baseData.map((month, index, array) => {
+           let smoothedNetPay = month.rawNetPay;
+           smoothedNetPay -= month.vacationPayoutSum;
+           if (index < array.length - 1) {
+              const prevMonthInArray = array[index + 1];
+              smoothedNetPay += prevMonthInArray.vacationPayoutSum;
+           }
+           return { ...month, smoothedNetPay };
+        });
+
+        return smoothedData.map((month, index, array) => {
+           let trendSum = month.smoothedNetPay;
+           let count = 1;
+           if (index < array.length - 1) { trendSum += array[index+1].smoothedNetPay; count++; }
+           if (index < array.length - 2) { trendSum += array[index+2].smoothedNetPay; count++; }
+           const trendNetPay = trendSum / count;
+
+           let finalNetPay = month.rawNetPay;
+           if (smoothingMode === 'smoothed') finalNetPay = month.smoothedNetPay;
+           else if (smoothingMode === 'trend') finalNetPay = trendNetPay;
+
+           const foreignEquivalent = finalNetPay / month.exchangeRate;
+           const hourlyRateForeign = month.hourlyRate / month.exchangeRate;
+
+           return {
+              ...month,
+              netPay: finalNetPay,
+              trendNetPay,
+              foreignEquivalent,
+              hourlyRateForeign
+           };
+        });
+      }, [dbData, historicalRates, smoothingMode]);
 
       const deletePayslip = useCallback((idToDelete) => {
         setDbData(prev => prev.filter(d => d.id !== idToDelete)); showToast("Розрахунковий лист видалено", "success");
@@ -643,13 +696,14 @@
 
       const contextValue = useMemo(() => ({
         theme, toggleTheme, isPrivateMode, togglePrivateMode,
+        smoothingMode, setSmoothingMode,
         activeTab, handleTabChange, pendingTab, confirmTabChange, cancelTabChange,
         selectedMonthId, setSelectedMonthId, isFormDirty, setIsFormDirty, editingPayslip, setEditingPayslip, startEditing, clearAllData, generateDummyData,
         dbData, setDbData, summaryData, liveRate, rateTimestamp, isLoadingRate, isOfflineRate, historicalRates,
         generateAndDownloadJSONFile, deletePayslip, showToast, hasUnexportedChanges,
         isMobileMenuOpen, setIsMobileMenuOpen,
         hasSeenImportHint, setHasSeenImportHint
-      }), [theme, isPrivateMode, activeTab, pendingTab, selectedMonthId, isFormDirty, editingPayslip, dbData, summaryData, liveRate, rateTimestamp, isLoadingRate, isOfflineRate, historicalRates, handleTabChange, confirmTabChange, cancelTabChange, setDbData, generateAndDownloadJSONFile, deletePayslip, showToast, hasUnexportedChanges, startEditing, clearAllData, generateDummyData, isMobileMenuOpen, hasSeenImportHint]);
+      }), [theme, isPrivateMode, smoothingMode, activeTab, pendingTab, selectedMonthId, isFormDirty, editingPayslip, dbData, summaryData, liveRate, rateTimestamp, isLoadingRate, isOfflineRate, historicalRates, handleTabChange, confirmTabChange, cancelTabChange, setDbData, generateAndDownloadJSONFile, deletePayslip, showToast, hasUnexportedChanges, startEditing, clearAllData, generateDummyData, isMobileMenuOpen, hasSeenImportHint]);
       
       return (
         <SalaryContext.Provider value={contextValue}>
@@ -971,7 +1025,7 @@
     });
 
     const DashboardView = () => {
-      const { dbData, summaryData, liveRate, rateTimestamp, isLoadingRate, isOfflineRate, handleTabChange, setSelectedMonthId, deletePayslip, theme, startEditing, isPrivateMode, generateDummyData } = useSalaryContext();
+      const { dbData, summaryData, liveRate, rateTimestamp, isLoadingRate, isOfflineRate, handleTabChange, setSelectedMonthId, deletePayslip, theme, startEditing, isPrivateMode, generateDummyData, smoothingMode, setSmoothingMode } = useSalaryContext();
       
       const [selectedYear, setSelectedYear] = useState(() => {
         const today = new Date();
@@ -1252,6 +1306,27 @@
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
               <div className="flex items-center gap-4 flex-wrap">
                 <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2"><IconActivity /> Динаміка</h2>
+                
+                {dashboardData.length > 1 && (
+                  <div className="flex bg-slate-100 dark:bg-slate-900/80 p-1 rounded-xl transition-colors border border-slate-200 dark:border-slate-700/50">
+                    <button 
+                      onClick={() => setSmoothingMode('raw')} 
+                      className={`px-3 py-1.5 rounded-lg text-xs md:text-sm font-semibold transition-all ${smoothingMode === 'raw' ? 'bg-white dark:bg-slate-800 shadow-sm text-slate-800 dark:text-slate-200' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
+                      title="Фактичний рух коштів по місяцях виплати"
+                    >Фактичний (Касовий)</button>
+                    <button 
+                      onClick={() => setSmoothingMode('smoothed')} 
+                      className={`px-3 py-1.5 rounded-lg text-xs md:text-sm font-semibold transition-all ${smoothingMode === 'smoothed' ? 'bg-indigo-50 dark:bg-indigo-900/30 shadow-sm text-indigo-700 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
+                      title="Відпускні розподілені за місяцями їх фактичного відпрацювання"
+                    >Згладжений (Зароблений)</button>
+                    <button 
+                      onClick={() => setSmoothingMode('trend')} 
+                      className={`px-3 py-1.5 rounded-lg text-xs md:text-sm font-semibold transition-all ${smoothingMode === 'trend' ? 'bg-amber-50 dark:bg-amber-900/30 shadow-sm text-amber-700 dark:text-amber-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
+                      title="Ковзне середнє за 3 місяці"
+                    >Тренд (Ковзне середнє)</button>
+                  </div>
+                )}
+
                 {dashboardData.length > 1 && (
                   <div className="flex bg-slate-100 dark:bg-slate-900/80 p-1 rounded-xl transition-colors border border-slate-200 dark:border-slate-700/50">
                     <button onClick={() => setChartMode('income')} className={`px-3 md:px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${chartMode === 'income' ? 'bg-white dark:bg-slate-800 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}>Дохід</button>
@@ -1355,7 +1430,7 @@
     };
 
     const PayslipView = () => {
-      const { summaryData, selectedMonthId, setSelectedMonthId, startEditing } = useSalaryContext();
+      const { summaryData, selectedMonthId, setSelectedMonthId, startEditing, handleTabChange } = useSalaryContext();
       const activeMonthData = summaryData.find(m => m.id === selectedMonthId) || summaryData[0];
       const [showMath, setShowMath] = useState(false);
 
@@ -1541,6 +1616,27 @@
                     </motion.div>
                   ))}
                 </div>
+              </div>
+            </motion.div>
+          )}
+
+          {(activeMonthData.hasVacation || activeMonthData.vacationPayoutSum > 0) && (
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 p-4 md:p-5 rounded-2xl border border-amber-100 dark:border-amber-800/30 flex items-start gap-3 md:gap-4 transition-colors">
+              <div className="text-xl md:text-2xl mt-0.5" style={{ filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.4))' }}>🌴</div>
+              <div className="flex-1">
+                <h3 className="text-sm font-bold text-amber-900 dark:text-amber-300 mb-2 uppercase tracking-wider">Відпустка / Лікарняні</h3>
+                <div className="bg-white/60 dark:bg-slate-800/50 p-3 rounded-xl border border-white dark:border-slate-700/50 shadow-sm backdrop-blur-sm mb-2">
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-snug block">
+                    У цьому розрахунковому листі зафіксовано відпустку або лікарняні.
+                    {activeMonthData.vacationPayoutSum > 0 && ` Загальна сума авансової виплати (утримання): ${formatCurrency(activeMonthData.vacationPayoutSum, 'UAH')}.`}
+                  </span>
+                </div>
+                <p className="text-xs text-amber-800 dark:text-amber-400 font-medium leading-relaxed mb-3">
+                  Частина виплати покриває дні наступного місяця. У режимі 'Згладжений дохід' графік вирівнює цю суму, щоб показати реальну зароблену (а не касову) суму за кожен місяць.
+                </p>
+                <button onClick={() => handleTabChange('vacation')} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm">
+                  🧳 Розрахувати вигідність наступної відпустки →
+                </button>
               </div>
             </motion.div>
           )}
@@ -1825,7 +1921,8 @@
       const currentNet = currentAccrued - currentDeducted;
       
       const calcPdfo = currentAccrued * 0.18;
-      const vzRate = Number(year) <= 2024 ? 0.015 : 0.05;
+      const numYear = Number(year);
+      const vzRate = numYear < 2024 || (numYear === 2024 && monthIdx < 11) ? 0.015 : 0.05;
       const calcVz = currentAccrued * vzRate;
       let actualPdfo = 0; let actualVz = 0;
       
@@ -2086,6 +2183,16 @@
                             </li>
                           ))}
                         </ul>
+                        {parserPreviewData.totalAccruedControl !== null && Math.abs(parserPreviewData.totalAccruedControl - parserPreviewData.tempAcc) > 1 && (
+                          <div className="mt-3 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-100/50 dark:bg-rose-900/30 p-2 rounded-lg flex items-start gap-1.5 border border-rose-200/50 dark:border-rose-800/30">
+                            <IconAlert /> <span>Не збігається з підсумком у файлі ({formatCurrency(parserPreviewData.totalAccruedControl, 'UAH')}). Можливо, щось пропущено.</span>
+                          </div>
+                        )}
+                        {parserPreviewData.totalAccruedControl !== null && Math.abs(parserPreviewData.totalAccruedControl - parserPreviewData.tempAcc) <= 1 && (
+                          <div className="mt-3 text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                            <IconCheck /> Сума збігається з підсумком
+                          </div>
+                        )}
                       </div>
                       
                       <div className="bg-rose-50 dark:bg-rose-900/10 rounded-xl p-4 border border-rose-100 dark:border-rose-900/30">
@@ -2098,6 +2205,16 @@
                             </li>
                           ))}
                         </ul>
+                        {parserPreviewData.totalDeductedControl !== null && Math.abs(parserPreviewData.totalDeductedControl - parserPreviewData.tempDed) > 1 && (
+                          <div className="mt-3 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-100/50 dark:bg-rose-900/30 p-2 rounded-lg flex items-start gap-1.5 border border-rose-200/50 dark:border-rose-800/30">
+                            <IconAlert /> <span>Не збігається з підсумком у файлі ({formatCurrency(parserPreviewData.totalDeductedControl, 'UAH')}).</span>
+                          </div>
+                        )}
+                        {parserPreviewData.totalDeductedControl !== null && Math.abs(parserPreviewData.totalDeductedControl - parserPreviewData.tempDed) <= 1 && (
+                          <div className="mt-3 text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                            <IconCheck /> Сума збігається з підсумком
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2266,6 +2383,156 @@
       );
     };
 
+    const VacationCalculatorView = () => {
+      const { summaryData, handleTabChange } = useSalaryContext();
+      const [vacationDays, setVacationDays] = useState(14);
+      const [selectedMonthIndex, setSelectedMonthIndex] = useState(0);
+
+      if (!summaryData || summaryData.length === 0) {
+        return (
+          <div className="flex flex-col items-center justify-center h-64 text-slate-400 dark:text-slate-500">
+            <IconSuitcase />
+            <p className="mt-4">Немає даних для розрахунку. Додайте розрахункові листи.</p>
+          </div>
+        );
+      }
+
+      const sortedData = [...summaryData].sort((a, b) => b.id.localeCompare(a.id));
+      const last12 = sortedData.slice(0, 12);
+      const totalAccrued12 = last12.reduce((sum, month) => sum + month.totalAccrued, 0);
+
+      const totalCalendarDays = last12.reduce((sum, m) => {
+        const daysInMonth = new Date(m.year, m.month, 0).getDate();
+        return sum + daysInMonth;
+      }, 0) || 365;
+      const avgDailyVacation = totalCalendarDays > 0 ? (totalAccrued12 / totalCalendarDays) : 0;
+
+      const latestMonth = sortedData[0];
+      const okladAccruals = latestMonth.accruals.filter(a => a.name.toLowerCase().includes('оклад') || a.name.toLowerCase().includes('надбав'));
+      const currentBase = okladAccruals.reduce((sum, a) => sum + Number(a.amount), 0) || latestMonth.totalAccrued;
+
+      const getWorkDaysInMonth = (year, monthNum) => {
+        const daysCount = new Date(year, monthNum, 0).getDate();
+        let workDays = 0;
+        for (let day = 1; day <= daysCount; day++) {
+          const dayOfWeek = new Date(year, monthNum - 1, day).getDay();
+          if (dayOfWeek !== 0 && dayOfWeek !== 6) workDays++;
+        }
+        return workDays;
+      };
+
+      const currentYear = new Date().getFullYear();
+
+      const monthAnalysis = Array.from({length: 12}, (_, i) => i + 1).map(mNum => {
+        const workDays = getWorkDaysInMonth(currentYear, mNum);
+        const dailyWage = workDays > 0 ? currentBase / workDays : 0;
+        const diffDaily = avgDailyVacation - dailyWage;
+        const diffTotal = diffDaily * vacationDays;
+        
+        return {
+          month: mNum,
+          monthName: MONTH_NAMES[mNum - 1],
+          workDays,
+          dailyWage,
+          diffDaily,
+          diffTotal,
+          isProfitable: diffDaily > 0
+        };
+      }).sort((a, b) => b.diffTotal - a.diffTotal);
+
+      const activeAnalysis = monthAnalysis[selectedMonthIndex] || monthAnalysis[0];
+
+      return (
+        <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="max-w-4xl mx-auto space-y-6 pb-20">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl flex items-center justify-center shadow-sm">
+              <IconSuitcase />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Калькулятор вигідності відпустки</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Алгоритм згідно з Порядком КМУ № 100</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-bold mb-4 text-slate-800 dark:text-slate-200">Параметри розрахунку</h3>
+              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">Кількість днів відпустки</label>
+              <div className="flex gap-2 mb-4">
+                {[7, 10, 14, 24].map(d => (
+                  <button key={d} onClick={() => setVacationDays(d)} className={`flex-1 px-3 py-2 rounded-lg font-medium transition-colors ${vacationDays === d ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>{d}</button>
+                ))}
+              </div>
+              <input type="range" min="1" max="30" value={vacationDays} onChange={(e) => setVacationDays(Number(e.target.value))} className="w-full accent-blue-600 mb-2" />
+              <div className="text-right text-sm font-bold text-blue-600 dark:text-blue-400 mb-6">{vacationDays} днів</div>
+
+              <div className="space-y-3 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700/50">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-slate-500">Ваш середньоденний відпускний:</span>
+                  <span className="font-bold font-mono text-slate-700 dark:text-slate-300">{formatCurrency(avgDailyVacation)}</span>
+                </div>
+                <div className="text-xs text-slate-400">
+                  Розраховано за останні {last12.length} міс. (База: {formatCurrency(totalAccrued12)} / {totalCalendarDays} календ. дн.)
+                  <div className="mt-1 opacity-75 italic">(Під час воєнного стану згідно із Законом № 2136-IX святкові дні не виключаються з розрахунку)</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
+              <h3 className="text-lg font-bold mb-4 text-slate-800 dark:text-slate-200">Рейтинг місяців ({vacationDays} дн.)</h3>
+              <div className="flex-1 overflow-y-auto pr-2 space-y-2 max-h-[300px] no-scrollbar">
+                {monthAnalysis.map((ma, idx) => (
+                  <button key={ma.month} onClick={() => setSelectedMonthIndex(idx)} className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${selectedMonthIndex === idx ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-sm' : 'border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30'}`}>
+                    <div className="flex items-center gap-3">
+                      <span className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${idx === 0 ? 'bg-amber-100 text-amber-700' : idx === 11 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}`}>
+                        {idx + 1}
+                      </span>
+                      <span className="font-medium text-slate-800 dark:text-slate-200">{ma.monthName}</span>
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <span className={`text-sm font-bold font-mono ${ma.isProfitable ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                        {ma.isProfitable ? '+' : ''}{formatCurrency(ma.diffTotal)}
+                      </span>
+                      <span className="text-[10px] text-slate-400">{ma.workDays} роб. дн.</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <motion.div key={activeAnalysis.month} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`rounded-2xl p-6 shadow-sm border ${activeAnalysis.isProfitable ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800/30' : 'bg-rose-50 dark:bg-rose-900/10 border-rose-200 dark:border-rose-800/30'}`}>
+            <div className="flex items-start gap-4">
+              <div className="text-4xl">{activeAnalysis.isProfitable ? '🔥' : '⚠️'}</div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold mb-2 text-slate-800 dark:text-slate-100">
+                  {activeAnalysis.isProfitable ? 'Брати відпустку ВИГІДНО!' : 'Брати відпустку НЕВИГІДНО!'}
+                </h3>
+                <p className="text-slate-700 dark:text-slate-300 leading-relaxed mb-4">
+                  {activeAnalysis.isProfitable 
+                    ? `Для місяця ${activeAnalysis.monthName.toLowerCase()} аж ${activeAnalysis.workDays} роб. днів. Це робить кожен робочий день "дешевшим" (${formatCurrency(activeAnalysis.dailyWage)}). Оскільки ваш середньоденний відпускний (${formatCurrency(avgDailyVacation)}) більший за денний заробіток, заміна ${vacationDays} робочих днів на відпустку принесе вам додатково `
+                    : `Для місяця ${activeAnalysis.monthName.toLowerCase()} лише ${activeAnalysis.workDays} роб. днів. Ваш робочий день коштує дорого (${formatCurrency(activeAnalysis.dailyWage)}). Ваш середньоденний відпускний (${formatCurrency(avgDailyVacation)}) менший, тому, йдучи у відпустку на ${vacationDays} днів, ви втрачаєте `}
+                  <span className="font-bold text-lg">{formatCurrency(Math.abs(activeAnalysis.diffTotal))}</span>.
+                </p>
+                
+                <div className="bg-white/60 dark:bg-slate-800/60 rounded-xl p-4 flex justify-between items-center">
+                  <div className="text-center">
+                    <div className="text-xs text-slate-500 mb-1">День відпустки</div>
+                    <div className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatCurrency(avgDailyVacation)}</div>
+                  </div>
+                  <div className="text-slate-300 dark:text-slate-600 font-bold">VS</div>
+                  <div className="text-center">
+                    <div className="text-xs text-slate-500 mb-1">Робочий день</div>
+                    <div className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatCurrency(activeAnalysis.dailyWage)}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      );
+    };
+
     const Layout = () => {
       const { theme, toggleTheme, isPrivateMode, togglePrivateMode, activeTab, handleTabChange, pendingTab, confirmTabChange, cancelTabChange, dbData, setDbData, generateAndDownloadJSONFile, showToast, hasUnexportedChanges, clearAllData, isMobileMenuOpen, setIsMobileMenuOpen } = useSalaryContext();
       const [isRestoring, setIsRestoring] = useState(false); const [showClearConfirm, setShowClearConfirm] = useState(false); const [isDragging, setIsDragging] = useState(false); const backupInputRef = useRef(null);
@@ -2349,6 +2616,10 @@
                   <span className="shrink-0"><IconFileText /></span>
                   <span className="truncate whitespace-normal leading-tight">Розрахункові листи</span>
                 </motion.button>
+                <motion.button whileTap={{ scale: 0.95 }} onClick={() => { if (dbData.length > 0) handleTabChange('vacation'); }} disabled={dbData.length === 0} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all text-left ${activeTab === 'vacation' ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed'}`}>
+                  <span className="shrink-0 text-xl" style={{ filter: 'drop-shadow(0 2px 2px rgba(245, 158, 11, 0.4))' }}>🧳</span>
+                  <span className="truncate whitespace-normal leading-tight">Калькулятор відпустки</span>
+                </motion.button>
                 <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-700">
                   <motion.button whileTap={{ scale: 0.95 }} onClick={() => handleTabChange('add')} className={`w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'add' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 dark:bg-slate-900/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/80'}`}>
                     <span className="shrink-0"><IconPlus /></span>
@@ -2380,6 +2651,7 @@
             <AnimatePresence mode="wait">
               {activeTab === 'dashboard' && <DashboardView key="dashboard" />}
               {activeTab === 'payslips' && <PayslipView key="payslips" />}
+              {activeTab === 'vacation' && <VacationCalculatorView key="vacation" />}
               {activeTab === 'add' && <AddPayslipView key="add" />}
             </AnimatePresence>
           </main>
