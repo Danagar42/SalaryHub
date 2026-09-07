@@ -2386,7 +2386,41 @@
     const VacationCalculatorView = () => {
       const { summaryData, handleTabChange } = useSalaryContext();
       const [vacationDays, setVacationDays] = useState(14);
-      const [selectedMonthIndex, setSelectedMonthIndex] = useState(0);
+      const [selectedMonthNum, setSelectedMonthNum] = useState(null);
+      
+      const [expectedBonusPct, setExpectedBonusPct] = useState(0);
+      const [useSeasonality, setUseSeasonality] = useState(false);
+      const [historicalBonusMap, setHistoricalBonusMap] = useState({});
+
+      useEffect(() => {
+        if (!summaryData || summaryData.length === 0) return;
+        const sortedData = [...summaryData].sort((a, b) => b.id.localeCompare(a.id));
+        const last12 = sortedData.slice(0, 12);
+        
+        let totalOklad = 0;
+        let totalBonus = 0;
+        const hMap = {};
+        
+        last12.forEach(m => {
+          const oklad = m.accruals.filter(a => a.name.toLowerCase().includes('оклад') || a.name.toLowerCase().includes('надбав')).reduce((sum, a) => sum + Number(a.amount), 0);
+          const bonus = m.totalBonuses + m.otherBonuses;
+          totalOklad += oklad;
+          totalBonus += bonus;
+          
+          if (oklad > 0) {
+            hMap[m.month] = (bonus / oklad) * 100;
+          }
+        });
+        
+        const avgBonus = totalOklad > 0 ? Math.round((totalBonus / totalOklad) * 100) : 0;
+        setExpectedBonusPct(avgBonus);
+        
+        const finalMap = {};
+        for(let i=1; i<=12; i++) {
+           finalMap[i] = hMap[i] !== undefined ? Math.round(hMap[i]) : avgBonus;
+        }
+        setHistoricalBonusMap(finalMap);
+      }, [summaryData]);
 
       if (!summaryData || summaryData.length === 0) {
         return (
@@ -2424,111 +2458,183 @@
       const currentYear = new Date().getFullYear();
 
       const monthAnalysis = Array.from({length: 12}, (_, i) => i + 1).map(mNum => {
+        const daysCount = new Date(currentYear, mNum, 0).getDate();
         const workDays = getWorkDaysInMonth(currentYear, mNum);
-        const dailyWage = workDays > 0 ? currentBase / workDays : 0;
-        const diffDaily = avgDailyVacation - dailyWage;
-        const diffTotal = diffDaily * vacationDays;
+        
+        const missedWorkDays = Math.round(vacationDays * (workDays / daysCount));
+        
+        const baseDailyWage = workDays > 0 ? currentBase / workDays : 0;
+        const appliedBonusPct = useSeasonality ? (historicalBonusMap[mNum] || 0) : expectedBonusPct;
+        
+        const vacationPay = avgDailyVacation * vacationDays;
+        const lostBasePay = baseDailyWage * missedWorkDays;
+        const lostBonusPay = (baseDailyWage * (appliedBonusPct / 100)) * missedWorkDays;
+        
+        const diffTotal = vacationPay - (lostBasePay + lostBonusPay);
         
         return {
           month: mNum,
           monthName: MONTH_NAMES[mNum - 1],
           workDays,
-          dailyWage,
-          diffDaily,
+          missedWorkDays,
+          baseDailyWage,
+          appliedBonusPct,
           diffTotal,
-          isProfitable: diffDaily > 0
+          vacationPay,
+          lostBasePay,
+          lostBonusPay,
+          isProfitable: diffTotal > 0
         };
       }).sort((a, b) => b.diffTotal - a.diffTotal);
 
-      const activeAnalysis = monthAnalysis[selectedMonthIndex] || monthAnalysis[0];
+      const activeAnalysis = (selectedMonthNum !== null ? monthAnalysis.find(m => m.month === selectedMonthNum) : null) || monthAnalysis[0];
 
       return (
-        <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="max-w-4xl mx-auto space-y-6 pb-20">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl flex items-center justify-center shadow-sm">
-              <IconSuitcase />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Калькулятор вигідності відпустки</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Алгоритм згідно з Порядком КМУ № 100</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-              <h3 className="text-lg font-bold mb-4 text-slate-800 dark:text-slate-200">Параметри розрахунку</h3>
-              <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">Кількість днів відпустки</label>
-              <div className="flex gap-2 mb-4">
-                {[7, 10, 14, 24].map(d => (
-                  <button key={d} onClick={() => setVacationDays(d)} className={`flex-1 px-3 py-2 rounded-lg font-medium transition-colors ${vacationDays === d ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>{d}</button>
-                ))}
+        <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="max-w-5xl mx-auto space-y-6 pb-20">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl flex items-center justify-center shadow-sm">
+                <IconSuitcase />
               </div>
-              <input type="range" min="1" max="30" value={vacationDays} onChange={(e) => setVacationDays(Number(e.target.value))} className="w-full accent-blue-600 mb-2" />
-              <div className="text-right text-sm font-bold text-blue-600 dark:text-blue-400 mb-6">{vacationDays} днів</div>
-
-              <div className="space-y-3 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700/50">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-500">Ваш середньоденний відпускний:</span>
-                  <span className="font-bold font-mono text-slate-700 dark:text-slate-300">{formatCurrency(avgDailyVacation)}</span>
-                </div>
-                <div className="text-xs text-slate-400">
-                  Розраховано за останні {last12.length} міс. (База: {formatCurrency(totalAccrued12)} / {totalCalendarDays} календ. дн.)
-                  <div className="mt-1 opacity-75 italic">(Під час воєнного стану згідно із Законом № 2136-IX святкові дні не виключаються з розрахунку)</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col">
-              <h3 className="text-lg font-bold mb-4 text-slate-800 dark:text-slate-200">Рейтинг місяців ({vacationDays} дн.)</h3>
-              <div className="flex-1 overflow-y-auto pr-2 space-y-2 max-h-[300px] no-scrollbar">
-                {monthAnalysis.map((ma, idx) => (
-                  <button key={ma.month} onClick={() => setSelectedMonthIndex(idx)} className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${selectedMonthIndex === idx ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-sm' : 'border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30'}`}>
-                    <div className="flex items-center gap-3">
-                      <span className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${idx === 0 ? 'bg-amber-100 text-amber-700' : idx === 11 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}`}>
-                        {idx + 1}
-                      </span>
-                      <span className="font-medium text-slate-800 dark:text-slate-200">{ma.monthName}</span>
-                    </div>
-                    <div className="flex flex-col items-end">
-                      <span className={`text-sm font-bold font-mono ${ma.isProfitable ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                        {ma.isProfitable ? '+' : ''}{formatCurrency(ma.diffTotal)}
-                      </span>
-                      <span className="text-[10px] text-slate-400">{ma.workDays} роб. дн.</span>
-                    </div>
-                  </button>
-                ))}
+              <div>
+                <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Калькулятор вигідності відпустки</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">З урахуванням премій та Порядку № 100</p>
               </div>
             </div>
           </div>
+          
+          <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-2xl p-5 shadow-sm text-sm text-amber-900 dark:text-amber-200">
+            <h4 className="font-bold flex items-center gap-2 mb-2">
+              <span className="text-lg">💡</span> Як премії впливають на вигідність?
+            </h4>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>Премії за останні 12 місяців <strong>підвищують</strong> ваші відпускні (вони вже включені в базу).</li>
+              <li>Але за дні відпустки премія поточного місяця <strong>не нараховується</strong> (ви втрачаєте її разом з окладом).</li>
+              <li><strong>Секрет:</strong> Найвигідніше йти у відпустку в місяці з помірною премією відразу <em>після</em> того, як ви отримали велику премію (вона підніме відпускні, а втратите ви мало).</li>
+            </ul>
+          </div>
 
-          <motion.div key={activeAnalysis.month} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`rounded-2xl p-6 shadow-sm border ${activeAnalysis.isProfitable ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800/30' : 'bg-rose-50 dark:bg-rose-900/10 border-rose-200 dark:border-rose-800/30'}`}>
-            <div className="flex items-start gap-4">
-              <div className="text-4xl">{activeAnalysis.isProfitable ? '🔥' : '⚠️'}</div>
-              <div className="flex-1">
-                <h3 className="text-xl font-bold mb-2 text-slate-800 dark:text-slate-100">
-                  {activeAnalysis.isProfitable ? 'Брати відпустку ВИГІДНО!' : 'Брати відпустку НЕВИГІДНО!'}
-                </h3>
-                <p className="text-slate-700 dark:text-slate-300 leading-relaxed mb-4">
-                  {activeAnalysis.isProfitable 
-                    ? `Для місяця ${activeAnalysis.monthName.toLowerCase()} аж ${activeAnalysis.workDays} роб. днів. Це робить кожен робочий день "дешевшим" (${formatCurrency(activeAnalysis.dailyWage)}). Оскільки ваш середньоденний відпускний (${formatCurrency(avgDailyVacation)}) більший за денний заробіток, заміна ${vacationDays} робочих днів на відпустку принесе вам додатково `
-                    : `Для місяця ${activeAnalysis.monthName.toLowerCase()} лише ${activeAnalysis.workDays} роб. днів. Ваш робочий день коштує дорого (${formatCurrency(activeAnalysis.dailyWage)}). Ваш середньоденний відпускний (${formatCurrency(avgDailyVacation)}) менший, тому, йдучи у відпустку на ${vacationDays} днів, ви втрачаєте `}
-                  <span className="font-bold text-lg">{formatCurrency(Math.abs(activeAnalysis.diffTotal))}</span>.
-                </p>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-5 space-y-6">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
+                <h3 className="text-lg font-bold mb-4 text-slate-800 dark:text-slate-200">Параметри відпустки</h3>
                 
-                <div className="bg-white/60 dark:bg-slate-800/60 rounded-xl p-4 flex justify-between items-center">
-                  <div className="text-center">
-                    <div className="text-xs text-slate-500 mb-1">День відпустки</div>
-                    <div className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatCurrency(avgDailyVacation)}</div>
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">Кількість днів</label>
+                  <div className="flex gap-2 mb-3">
+                    {[7, 10, 14, 24].map(d => (
+                      <button key={d} onClick={() => setVacationDays(d)} className={`flex-1 px-3 py-2 rounded-lg font-medium transition-colors ${vacationDays === d ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>{d}</button>
+                    ))}
                   </div>
-                  <div className="text-slate-300 dark:text-slate-600 font-bold">VS</div>
-                  <div className="text-center">
-                    <div className="text-xs text-slate-500 mb-1">Робочий день</div>
-                    <div className="font-mono font-bold text-slate-800 dark:text-slate-200">{formatCurrency(activeAnalysis.dailyWage)}</div>
+                  <input type="range" min="1" max="30" value={vacationDays} onChange={(e) => setVacationDays(Number(e.target.value))} className="w-full accent-blue-600 mb-1" />
+                  <div className="text-right text-sm font-bold text-blue-600 dark:text-blue-400">{vacationDays} днів</div>
+                </div>
+
+                <div className="mb-6 pt-4 border-t border-slate-100 dark:border-slate-700">
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-sm font-medium text-slate-600 dark:text-slate-400">Очікувана премія поточного періоду</label>
+                    <span className="text-sm font-bold text-blue-600 dark:text-blue-400">{expectedBonusPct}%</span>
+                  </div>
+                  <div className="flex gap-1.5 mb-3 flex-wrap">
+                    {[0, 20, 50, 75, 100, 150].map(p => (
+                      <button key={p} onClick={() => setExpectedBonusPct(p)} className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors ${expectedBonusPct === p ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>{p}%</button>
+                    ))}
+                  </div>
+                  <input type="range" min="0" max="200" step="5" value={expectedBonusPct} onChange={(e) => setExpectedBonusPct(Number(e.target.value))} className="w-full accent-blue-600 mb-4" disabled={useSeasonality} />
+                  
+                  <label className="flex items-center gap-3 cursor-pointer p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    <div className="relative inline-flex items-center">
+                      <input type="checkbox" className="sr-only peer" checked={useSeasonality} onChange={() => setUseSeasonality(!useSeasonality)} />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600"></div>
+                    </div>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Враховувати сезонність премій (історичний % по місяцях)</span>
+                  </label>
+                </div>
+
+                <div className="space-y-3 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700/50">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-slate-500">Ваш середньоденний відпускний:</span>
+                    <span className="font-bold font-mono text-slate-700 dark:text-slate-300">{formatCurrency(avgDailyVacation)}</span>
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    База: {formatCurrency(totalAccrued12)} / {totalCalendarDays} календ. дн.
                   </div>
                 </div>
               </div>
             </div>
-          </motion.div>
+
+            <div className="lg:col-span-7 flex flex-col gap-6">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col max-h-[400px]">
+                <h3 className="text-lg font-bold mb-4 text-slate-800 dark:text-slate-200 flex justify-between">
+                  <span>Рейтинг місяців</span>
+                  <span className="text-sm font-normal text-slate-500">({vacationDays} дн.)</span>
+                </h3>
+                <div className="flex-1 overflow-y-auto pr-2 space-y-2 no-scrollbar">
+                  {monthAnalysis.map((ma, idx) => (
+                    <button key={ma.month} onClick={() => setSelectedMonthNum(ma.month)} className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${activeAnalysis.month === ma.month ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-sm' : 'border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30'}`}>
+                      <div className="flex items-center gap-3">
+                        <span className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${idx === 0 ? 'bg-emerald-100 text-emerald-700' : idx === 11 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}`}>
+                          {idx + 1}
+                        </span>
+                        <span className="font-medium text-slate-800 dark:text-slate-200 w-20">{ma.monthName}</span>
+                        {useSeasonality && <span className="text-xs text-slate-400 w-16 text-right whitespace-nowrap">п: {ma.appliedBonusPct}%</span>}
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className={`text-sm font-bold font-mono ${ma.isProfitable ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                          {ma.isProfitable ? '+' : ''}{formatCurrency(ma.diffTotal)}
+                        </span>
+                        <span className="text-[10px] text-slate-400">{ma.workDays} роб. дн.</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <AnimatePresence mode="wait">
+                <motion.div key={activeAnalysis.month} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className={`rounded-2xl p-6 shadow-sm border ${activeAnalysis.isProfitable ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800/30' : 'bg-rose-50 dark:bg-rose-900/10 border-rose-200 dark:border-rose-800/30'}`}>
+                  <div className="flex items-start gap-4 mb-5">
+                    <div className="text-4xl">{activeAnalysis.isProfitable ? '🔥' : '⚠️'}</div>
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold mb-1 text-slate-800 dark:text-slate-100">
+                        {activeAnalysis.monthName}: {activeAnalysis.isProfitable ? 'Брати відпустку ВИГІДНО!' : 'Брати відпустку НЕВИГІДНО!'}
+                      </h3>
+                      <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+                        {activeAnalysis.isProfitable 
+                          ? `Оскільки відпускні вищі за вашу оплату за ${activeAnalysis.missedWorkDays} робочих днів (з урахуванням премії), ви виграєте фінансово.`
+                          : `Оплата за ${activeAnalysis.missedWorkDays} робочих днів (з урахуванням премії) вища за відпускні. Йдучи у відпустку на ${vacationDays} днів, ви втрачаєте гроші.`}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border border-slate-100 dark:border-slate-700/50">
+                    <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 border-b border-slate-100 dark:border-slate-700 pb-2">Фінансова розбивка (за {vacationDays} дн.)</h4>
+                    
+                    <div className="space-y-2 mb-3">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-slate-600 dark:text-slate-400 flex items-center gap-2">🌴 Нараховані відпускні</span>
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">+{formatCurrency(activeAnalysis.vacationPay)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-slate-600 dark:text-slate-400 flex items-center gap-2">💼 Недоотриманий оклад</span>
+                        <span className="font-bold text-rose-600 dark:text-rose-400 font-mono">-{formatCurrency(activeAnalysis.lostBasePay)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-slate-600 dark:text-slate-400 flex items-center gap-2">🎁 Недоотримана премія ({activeAnalysis.appliedBonusPct}%)</span>
+                        <span className="font-bold text-rose-600 dark:text-rose-400 font-mono">-{formatCurrency(activeAnalysis.lostBonusPay)}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between items-center pt-3 border-t border-slate-100 dark:border-slate-700">
+                      <span className="font-bold text-slate-800 dark:text-slate-200">⚖️ Чистий результат</span>
+                      <span className={`font-bold font-mono text-lg ${activeAnalysis.isProfitable ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                        {activeAnalysis.isProfitable ? '+' : ''}{formatCurrency(activeAnalysis.diffTotal)}
+                      </span>
+                    </div>
+                  </div>
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </div>
         </motion.div>
       );
     };
