@@ -193,8 +193,8 @@
       // Виплати працівникові
       const isBank = /перерахування|банк|картк|о\/р/i.test(lower);
       const isAdvance = /аванс/i.test(lower) && !isBank;
-      const isVacation = (/виплачен[оі].*відпускн/i.test(lower) || /відпускн.*виплат/i.test(lower)) && !lower.includes('лікарнян');
-      const isSick = /виплачен[оі].*лікарнян/i.test(lower);
+      const isVacation = (/(?:випла(?:чен[оі]|т\p{L}*).*відпус[тк]|відпус[тк].*випла)/iu.test(lower)) && !lower.includes('лікарнян');
+      const isSick = /(?:випла(?:чен[оі]|т\p{L}*).*лікарнян|лікарнян.*випла)/iu.test(lower);
       const isRegularPayout = /виплат|виплачено/i.test(lower) && !isAdvance && !isVacation && !isSick && !isBank;
       const isPayout = isBank || isAdvance || isVacation || isSick || isRegularPayout;
       const isTax = !isPayout;
@@ -788,7 +788,7 @@
             })
             .reduce((sum, item) => sum + Number(item.amount), 0);
 
-          let prevMonthVacationPayout = 0; let calculatedBonusPercent = null; let bonusPercentNumeric = 0;
+          let calculatedBonusPercent = null; let bonusPercentNumeric = 0;
 
           if (index < array.length - 1) {
             const prevMonth = array[index + 1];
@@ -796,10 +796,6 @@
             const diffMonths = (currDate.getFullYear() - prevDate.getFullYear()) * 12 + (currDate.getMonth() - prevDate.getMonth());
             
             if (diffMonths === 1) {
-              const vacationInDeductions = prevMonth.deductions.filter(d => (d.name.toLowerCase().match(/виплачен[оі].*відпускн/) || d.name.toLowerCase().match(/відпускн.*виплат/)) && !d.name.toLowerCase().includes('лікарнян')).reduce((sum, item) => sum + Number(item.amount), 0);
-              const vacationInAccruals = prevMonth.accruals.filter(a => a.name.toLowerCase().match(/виплачен[оі].*відпускн/)).reduce((sum, item) => sum + Number(item.amount), 0);
-              prevMonthVacationPayout = vacationInDeductions + vacationInAccruals;
-
               if (totalBonuses > 0) {
                 const prevOkladTotal = prevMonth.accruals.filter(a => a.name.toLowerCase().includes('оклад')).reduce((sum, item) => sum + Number(item.amount), 0);
                 if (prevOkladTotal > 0) {
@@ -868,7 +864,7 @@
           const hourlyRate = okladHours > 0 ? ((okladAmount + stazhAmount) / okladHours) : 0;
           const hasVacation = validAccruals.some(a => { 
             const n = a.name.toLowerCase(); 
-            return (n.includes('відпуст') || n.includes('відпуск')) && !n.includes('донор'); 
+            return (n.includes('відпуст') || n.includes('відпуск')) && !n.includes('донор') && !n.includes('компенсац'); 
           });
 
           const isFallbackRate = !historicalRates[month.id];
@@ -896,8 +892,7 @@
 
           return { 
             ...month, accruals: validAccruals, deductions: validDeductions,
-            totalAccrued, totalDeducted, taxes, rawNetPay, earnedNetPay, toBank, explicitBankSum, paidBySlipSum, hasExplicitBankPayout, calculatedBankRemainder, advanceSum, payoutSum, regularPayoutSum, vacationPayoutSum, prevMonthVacationPayout, 
-            totalBonuses, otherBonuses, hasVacation, calculatedBonusPercent, bonusPercentNumeric, hourlyRate,
+            totalAccrued, totalDeducted, taxes, rawNetPay, earnedNetPay, toBank, explicitBankSum, paidBySlipSum, hasExplicitBankPayout, calculatedBankRemainder, advanceSum, payoutSum, regularPayoutSum, vacationPayoutSum,             totalBonuses, otherBonuses, hasVacation, calculatedBonusPercent, bonusPercentNumeric, hourlyRate,
             exchangeRate: actualRate,
             isFallbackRate,
             taxWarnings

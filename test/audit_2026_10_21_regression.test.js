@@ -392,7 +392,9 @@ assert(classifyFn('Виплата заробітної плати через б�
 assert(classifyFn('Плановий аванс').isAdvance === true, 'Advance is advance');
 assert(classifyFn('Плановий аванс').isPayout === true, 'Advance is payout');
 assert(classifyFn('Виплачено відпускні').isVacation === true, 'Vacation payout is vacation payout');
+assert(classifyFn('Виплата відпускних').isVacation === true, 'Виплата відпускних is vacation payout');
 assert(classifyFn('Виплачено лікарняні').isSick === true, 'Sick payout is sick payout');
+assert(classifyFn('Виплата лікарняних').isSick === true, 'Виплата лікарняних is sick payout');
 assert(classifyFn('Виплата через касу').isRegularPayout === true, 'Cash payout is regular payout');
 
 // ----------------------------------------------------
