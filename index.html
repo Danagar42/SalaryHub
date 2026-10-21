@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SalaryHub - Розрахункові листи (з підтримкою Excel)</title>
   
   <!-- Завантаження Tailwind CSS -->
@@ -32,7 +32,7 @@
   <script src="https://unpkg.com/recharts@2.12.3/umd/Recharts.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   <!-- Бібліотека для парсингу Excel файлів локально -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700;800&display=swap');
@@ -80,7 +80,8 @@
     const IconAreaChart = () => <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>;
     const IconChevronLeft = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>;
     const IconChevronRight = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>;
-    const IconSuitcase = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>;
+    const IconLightbulb = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>;
+    const IconPalmtree = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 8c0-2.76-2.46-5-5.5-5S2 5.24 2 8h2l1-1 1 1h4"/><path d="M13 7.14A5.82 5.82 0 0 1 16.5 6c3.04 0 5.5 2.24 5.5 5h-2l-1-1-1 1h-3"/><path d="M5.89 15.55c1.43-.87 3.11-1.4 4.88-1.51M13 10.5a6 6 0 0 1 4.5 2"/><path d="m11.5 13-1.5 8"/><path d="m12.5 13 1.5 8"/></svg>;
 
     const MONTH_NAMES = ["Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень", "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень"];
 
@@ -108,10 +109,18 @@
     };
 
     const getTextColorGradient = (value, min, max, theme) => {
-      if (max === min) return { color: theme === 'dark' ? '#34d399' : 'hsl(120, 75%, 45%)' }; 
+      if (max === min) return { color: theme === 'dark' ? '#34d399' : '#047857' }; // темно-зелений для світлої теми
       const percent = (value - min) / (max - min);
-      const lightness = theme === 'dark' ? 65 : 45;
-      return { color: `hsl(${percent * 120}, 75%, ${lightness}%)` }; 
+      
+      if (theme === 'dark') {
+        return { color: `hsl(${percent * 120}, 75%, 65%)` };
+      } else {
+        // Забезпечуємо контрастність WCAG AA (>= 4.5:1) на білому фоні за рахунок компенсації яскравості жовтого спектру
+        const yellowDip = Math.sin(percent * Math.PI) * 10;
+        const adjustedLightness = 34 - (percent * 8) - yellowDip;
+        const hue = percent * 110; // від червоного (0) через оливковий до зеленого (110)
+        return { color: `hsl(${hue}, 85%, ${adjustedLightness}%)` };
+      }
     };
 
     const useLocalStorage = (key, initialValue) => {
@@ -121,12 +130,14 @@
           if (!item) return initialValue;
           const parsed = JSON.parse(item);
           if (key === 'salaryHubData' && Array.isArray(parsed)) {
-            return parsed.map(item => {
-              if (item.id && item.id.includes('.')) {
-                const mIdx = MONTH_NAMES.indexOf(item.monthName);
-                const monthStr = String(mIdx + 1).padStart(2, '0');
-                const yearNum = item.year.toString().length === 2 ? `20${item.year}` : item.year;
-                return { ...item, id: `${yearNum}-${monthStr}`, month: mIdx + 1, year: Number(yearNum) };
+            return parsed.filter(item => item && typeof item === 'object').map(item => {
+              if (item.id && typeof item.id === 'string' && item.id.includes('.')) {
+                const mIdx = item.monthName ? MONTH_NAMES.indexOf(item.monthName) : -1;
+                const safeMonth = mIdx !== -1 ? mIdx + 1 : (item.month || 1);
+                const monthStr = String(safeMonth).padStart(2, '0');
+                const rawYear = item.year != null ? String(item.year) : (item.id.split('.')[1] || '2026');
+                const yearNum = rawYear.length === 2 ? `20${rawYear}` : rawYear;
+                return { ...item, id: `${yearNum}-${monthStr}`, month: safeMonth, year: Number(yearNum) };
               }
               return item;
             });
@@ -138,17 +149,69 @@
         }
       });
 
+      const valueRef = (typeof useRef === 'function') ? useRef(storedValue) : { current: storedValue };
+      valueRef.current = storedValue;
+
       const setValue = (value) => {
         try {
-          const valueToStore = value instanceof Function ? value(storedValue) : value;
+          const valueToStore = typeof value === 'function' ? value(valueRef.current) : value;
+          const serialized = JSON.stringify(valueToStore);
+          window.localStorage.setItem(key, serialized);
+          valueRef.current = valueToStore;
           setStoredValue(valueToStore);
-          window.localStorage.setItem(key, JSON.stringify(valueToStore));
+          return true;
         } catch (error) {
           console.error("Error setting localStorage", error);
+          if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+            window.dispatchEvent(new CustomEvent('salaryhub-storage-error', { detail: { key, error } }));
+          }
+          return false;
         }
       };
 
       return [storedValue, setValue];
+    };
+
+    // Єдина функція класифікації утримань (виплати vs податки/збори/інші відрахування)
+    const classifyDeduction = (name) => {
+      const lower = String(name || '').toLowerCase();
+
+      // Не-виплатні утримання (податки, збори, профвнески, аліменти, виконавчі листи, штрафи, благодійність)
+      const isNonPayoutWithholding = 
+        /[пp][рp][оo]ф/i.test(lower) ||
+        /алімент/i.test(lower) ||
+        /виконавч/i.test(lower) ||
+        /стягненн/i.test(lower) ||
+        /штраф/i.test(lower) ||
+        /благодійн|зсу/i.test(lower) ||
+        /податок|пдфо|військов|\bвз\b/i.test(lower);
+
+      if (isNonPayoutWithholding) {
+        return { isPayout: false, isTax: true, isBank: false, isAdvance: false, isVacation: false, isSick: false, isRegularPayout: false };
+      }
+
+      // Виплати працівникові
+      const isBank = /перерахування|банк|картк|о\/р/i.test(lower);
+      const isAdvance = /аванс/i.test(lower) && !isBank;
+      const isVacation = (/виплачен[оі].*відпускн/i.test(lower) || /відпускн.*виплат/i.test(lower)) && !lower.includes('лікарнян');
+      const isSick = /виплачен[оі].*лікарнян/i.test(lower);
+      const isRegularPayout = /виплат|виплачено/i.test(lower) && !isAdvance && !isVacation && !isSick && !isBank;
+      const isPayout = isBank || isAdvance || isVacation || isSick || isRegularPayout;
+      const isTax = !isPayout;
+
+      return { isPayout, isTax, isBank, isAdvance, isVacation, isSick, isRegularPayout };
+    };
+
+    const getFetchSignal = (timeoutMs = 5000) => {
+      if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+        return AbortSignal.timeout(timeoutMs);
+      }
+      if (typeof AbortController !== 'undefined') {
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), timeoutMs);
+        return controller.signal;
+      }
+      return undefined;
     };
 
     const useExchangeRates = (dbData) => {
@@ -163,7 +226,8 @@
           setIsLoadingRate(true);
           setIsOfflineRate(false);
           try {
-            const res = await fetch(`https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&json`);
+            const signal = getFetchSignal(5000);
+            const res = await fetch(`https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&json`, { signal });
             if (!res.ok) throw new Error('Network error');
             const data = await res.json();
             if (isMounted && data?.[0]) {
@@ -184,30 +248,33 @@
         let isMounted = true;
         
         const fetchHistorical = async () => {
-          let updated = false;
-          const currentRates = { ...historicalRates };
+          const missingItems = dbData.filter(item => item && item.id && !historicalRates[item.id]);
+          if (missingItems.length === 0) return;
 
-          for (const item of dbData) {
-            if (!isMounted) break;
-            if (currentRates[item.id]) continue;
-            
-            try {
-              const dateStr = `${item.id.replace('-', '')}01`; 
-              const res = await fetch(`https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&date=${dateStr}&json`);
-              if (!res.ok) continue;
-              const data = await res.json();
-              
-              if (data?.[0]) {
-                currentRates[item.id] = data[0].rate;
-                updated = true;
-              }
-            } catch (e) {
-              console.warn(`Failed to fetch rate for ${item.id}`, e);
+          const fetchItem = async (item) => {
+            const dateStr = `${String(item.id).replace('-', '')}01`;
+            const signal = getFetchSignal(5000);
+            const res = await fetch(`https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?valcode=USD&date=${dateStr}&json`, { signal });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            if (data?.[0]?.rate) {
+              return { id: item.id, rate: data[0].rate };
             }
-          }
-          
-          if (updated && isMounted) {
-            setHistoricalRates(currentRates);
+            throw new Error('Rate not found');
+          };
+
+          const results = await Promise.allSettled(missingItems.map(fetchItem));
+          if (!isMounted) return;
+
+          const resolvedRates = {};
+          results.forEach(r => {
+            if (r.status === 'fulfilled' && r.value?.rate) {
+              resolvedRates[r.value.id] = r.value.rate;
+            }
+          });
+
+          if (Object.keys(resolvedRates).length > 0 && isMounted) {
+            setHistoricalRates(prev => ({ ...prev, ...resolvedRates }));
           }
         };
         
@@ -224,16 +291,74 @@
       };
     };
 
-    const ParserModule = {
-      accrualKeywords: ['оклад', 'премі', 'відпуст', 'лікарн', 'непрацездатн', 'доплат', 'надбавк', 'надб', 'компенсац', 'індексац', 'оплат', 'допомог', 'відрядж', 'мобілізован', 'матеріал', 'інші', 'донор'],
-      deductionKeywords: ['аванс', 'податок', 'пдфо', 'збір', 'внеск', 'виплачено', 'виплачені', 'виплата', 'виплат', 'утриманн', 'перерахуванн', 'картк', 'банк', 'проф', 'алімент', 'борг', 'зсу', 'благодійн', 'виконавч', 'о/р', 'вз'],
+    const getMilitaryTaxRate = (year, monthOrIdx, isZeroIndexed = false) => {
+      const y = Number(year);
+      const m = isZeroIndexed ? Number(monthOrIdx) + 1 : Number(monthOrIdx);
+      // Prior to December 2024: 1.5% (0.015). From December 2024 onwards (Law No. 4015-IX): 5.0% (0.05).
+      return (y < 2024 || (y === 2024 && m < 12)) ? 0.015 : 0.05;
+    };
 
-      cleanNumberString: (val) => String(val ?? '').replace(/[\s\u00A0]+/g, '').replace(',', '.'),
+    const ParserModule = {
+      accrualKeywords: [
+        'оклад', 'премі', 'відпуст', 'відпуск', 'лікарн', 'непрацездатн', 
+        'доплат', 'надбавк', 'надб', 'компенсац', 'індексац', 'оплат', 
+        'допомог', 'допом', 'оздор', 'відпус', 'відрядж', 'мобілізован', 'матеріал', 'інші', 'донор', 
+        'вислуг', 'стаж', 'нічн', 'святков', 'надуроч'
+      ],
+      deductionKeywords: [
+        'аванс', 'податок', 'пдфо', 'збір', 'внеск', 'виплачено', 'виплачені', 
+        'виплата', 'виплат', 'утриман', 'перерахуванн', 'картк', 'банк', 
+        'проф', 'алімент', 'борг', 'зсу', 'благодійн', 'виконавч', 'о/р', 'вз', 'страхуван'
+      ],
+
+      cleanNumberString: (val) => {
+        if (val == null) return '';
+        let str = String(val).trim().replace(/(?:грн\.?|uah|₴)/gi, '').trim().replace(/[\s\u00A0]+/g, '');
+        str = str.replace(/[\u2212\u2013\u2014]/g, '-');
+        if (/^\((.+)\)$/.test(str)) {
+          str = '-' + str.slice(1, -1);
+        }
+        const isNeg = str.startsWith('-');
+        const numPart = isNeg ? str.slice(1) : str;
+        if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(numPart)) {
+          str = (isNeg ? '-' : '') + numPart.replace(/,/g, '');
+        } else {
+          str = str.replace(',', '.');
+        }
+        return str;
+      },
+
+      isDateString: (val) => {
+        if (val == null || val === '') return false;
+        const raw = String(val).trim();
+        // DD.MM.YYYY, DD/MM/YYYY, YYYY-MM-DD
+        if (/^\d{1,2}[\.\/]\d{1,2}[\.\/]\d{2,4}$/.test(raw)) return true;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return true;
+        // MM.YYYY or MM/YYYY or MM-YYYY
+        if (/^(0?[1-9]|1[0-2])[\.\/\-](19\d{2}|20\d{2})$/.test(raw)) return true;
+        // YYYY-MM or YYYY/MM (strictly '-' or '/', not '.' which represents decimal currency cents)
+        if (/^(19\d{2}|20\d{2})[\/\-](0?[1-9]|1[0-2])$/.test(raw)) return true;
+        return false;
+      },
 
       isPeriodCode: (val) => {
         if (val == null || val === '') return false;
-        const str = ParserModule.cleanNumberString(val).replace('-', '');
-        return /^(19|20)\d{4}$/.test(str); 
+        const raw = String(val).trim();
+        if (raw.startsWith('-') || raw.startsWith('\u2212') || raw.startsWith('–') || /^\(.*\)$/.test(raw)) return false;
+        // Separated date / period code e.g. 08.2026, 2026-08, 08/2026, 2026/08
+        if (/^(0?[1-9]|1[0-2])[\.\/\-](19\d{2}|20\d{2})$/.test(raw)) return true;
+        if (/^(19\d{2}|20\d{2})[\/\-](0?[1-9]|1[0-2])$/.test(raw)) return true;
+        
+        // If it contains decimal cents (.50, .25), it is a monetary amount, not a period code.
+        // Strip trailing zero decimals (.0, .00) that may come from Excel numeric cells.
+        const cleanWithDot = ParserModule.cleanNumberString(val);
+        if (cleanWithDot.startsWith('-')) return false;
+        const withoutTrailingZeros = cleanWithDot.replace(/\.0+$/, '');
+        if (withoutTrailingZeros.includes('.')) return false;
+
+        // 6-digit period code: strictly YYYYMM where YYYY is 19xx/20xx and MM is 01-12
+        const clean = withoutTrailingZeros.replace(/[-.\/]/g, '');
+        return /^(19\d{2}|20\d{2})(0[1-9]|1[0-2])$/.test(clean);
       },
       
       isHourValue: (val) => {
@@ -243,26 +368,30 @@
       
       isAmount: (val) => {
         if (val == null || val === '') return false;
+        if (ParserModule.isDateString(val)) return false;
         const str = ParserModule.cleanNumberString(val);
         if (!/^-?\d+(\.\d+)?$/.test(str)) return false;
-        if (ParserModule.isPeriodCode(val)) return false; 
         return Math.abs(parseFloat(str)) > 0;
       },
 
       parseNum: (val) => {
         const str = ParserModule.cleanNumberString(val);
-        return Math.abs(parseFloat(str)) || 0;
+        return parseFloat(str) || 0;
       },
       
       sanitizeName: (val) => String(val ?? '').replace(/^\d+[\.\s-]*/, '').trim(),
       
-      findAmountBeforePeriod: (row, startIdx, endIdx) => {
+      findAmountBeforePeriod: (row, startIdx, endIdx, docPeriod = null) => {
         const safeEnd = Math.min(endIdx, row.length);
-        for (let i = startIdx; i < safeEnd; i++) {
+        for (let i = safeEnd - 1; i >= startIdx; i--) {
           if (ParserModule.isPeriodCode(row[i])) {
             for (let j = i - 1; j >= startIdx; j--) {
-              if (ParserModule.isAmount(row[j])) {
-                return { amount: ParserModule.parseNum(row[j]), index: j };
+              if (ParserModule.isAmount(row[j]) || String(row[j] ?? '').trim() === '0') {
+                const amt = ParserModule.parseNum(row[j]);
+                // Ensure candidate before period is a real amount or 0 (not item code 1)
+                if (amt === 0 || !Number.isInteger(amt) || Math.abs(amt) > 1) {
+                  return { amount: amt, index: j };
+                }
               }
             }
           }
@@ -270,8 +399,8 @@
         return null;
       },
       
-      findBestAmount: (row, startIdx, endIdx) => {
-        const structured = ParserModule.findAmountBeforePeriod(row, startIdx, endIdx);
+      findBestAmount: (row, startIdx, endIdx, docPeriod = null) => {
+        const structured = ParserModule.findAmountBeforePeriod(row, startIdx, endIdx, docPeriod);
         if (structured) return structured;
         
         const candidates = [];
@@ -279,24 +408,79 @@
         for (let i = startIdx; i < safeEnd; i++) {
           if (ParserModule.isAmount(row[i])) {
             const value = ParserModule.parseNum(row[i]);
-            candidates.push({ amount: value, index: i });
+            candidates.push({ amount: value, index: i, raw: row[i] });
           }
         }
         if (candidates.length === 0) return { amount: 0, index: -1 };
-        
-        const preferred = [...candidates].reverse().find(c => !Number.isInteger(c.amount) || c.amount > 31);
-        return preferred || candidates[candidates.length - 1];
+        if (candidates.length === 1) return { amount: candidates[0].amount, index: candidates[0].index };
+
+        let nonDateCandidates = candidates.filter(c => !ParserModule.isDateString(c.raw));
+        if (nonDateCandidates.length === 1) return { amount: nonDateCandidates[0].amount, index: nonDateCandidates[0].index };
+        if (nonDateCandidates.length === 0) nonDateCandidates = candidates;
+
+        const realAmounts = nonDateCandidates.filter(c => !Number.isInteger(c.amount) || Math.abs(c.amount) > 31);
+        if (realAmounts.length === 1) {
+          if (!ParserModule.isPeriodCode(realAmounts[0].raw)) {
+            return { amount: realAmounts[0].amount, index: realAmounts[0].index };
+          }
+          // If candidate > 31 is a period code, check for preceding non-period amounts (e.g. 20 грн vs item code 1)
+          const preceding = nonDateCandidates.filter(c => c.index < realAmounts[0].index && !ParserModule.isPeriodCode(c.raw) && (!Number.isInteger(c.amount) || Math.abs(c.amount) > 1));
+          if (preceding.length > 0) {
+            return { amount: preceding[preceding.length - 1].amount, index: preceding[preceding.length - 1].index };
+          }
+          return { amount: realAmounts[0].amount, index: realAmounts[0].index };
+        }
+        if (realAmounts.length > 1) {
+          const lastCandidate = realAmounts[realAmounts.length - 1];
+          if (ParserModule.isPeriodCode(lastCandidate.raw)) {
+            return { amount: realAmounts[realAmounts.length - 2].amount, index: realAmounts[realAmounts.length - 2].index };
+          }
+          return { amount: lastCandidate.amount, index: lastCandidate.index };
+        }
+        const nonPeriod = nonDateCandidates.filter(c => !ParserModule.isPeriodCode(c.raw) && (!Number.isInteger(c.amount) || Math.abs(c.amount) > 1));
+        if (nonPeriod.length > 0) {
+          return { amount: nonPeriod[nonPeriod.length - 1].amount, index: nonPeriod[nonPeriod.length - 1].index };
+        }
+        return { amount: nonDateCandidates[nonDateCandidates.length - 1].amount, index: nonDateCandidates[nonDateCandidates.length - 1].index };
       },
       
-      findDeductionAmount: (row, startIdx) => {
+      findDeductionAmount: (row, startIdx, endIdx = row.length, docPeriod = null) => {
+        const safeEnd = Math.min(endIdx, row.length);
+        // Check for deduction amount preceding a period code from right to left
+        for (let i = safeEnd - 1; i >= startIdx; i--) {
+          if (ParserModule.isPeriodCode(row[i])) {
+            for (let j = i - 1; j >= startIdx; j--) {
+              if (ParserModule.isAmount(row[j])) {
+                const amt = ParserModule.parseNum(row[j]);
+                if (!Number.isInteger(amt) || Math.abs(amt) > 1) {
+                  return { amount: amt, index: j };
+                }
+              }
+            }
+          }
+        }
         const candidates = [];
-        for (let i = startIdx; i < row.length; i++) {
+        for (let i = startIdx; i < safeEnd; i++) {
           if (ParserModule.isAmount(row[i])) {
-            candidates.push({ amount: ParserModule.parseNum(row[i]), index: i });
+            candidates.push({ amount: ParserModule.parseNum(row[i]), index: i, raw: row[i] });
           }
         }
         if (candidates.length === 0) return { amount: 0, index: -1 };
-        return candidates[candidates.length - 1]; 
+        if (candidates.length === 1) return { amount: candidates[0].amount, index: candidates[0].index };
+
+        let nonDateCandidates = candidates.filter(c => !ParserModule.isDateString(c.raw));
+        if (nonDateCandidates.length === 1) return { amount: nonDateCandidates[0].amount, index: nonDateCandidates[0].index };
+        if (nonDateCandidates.length === 0) nonDateCandidates = candidates;
+
+        if (nonDateCandidates.length > 1) {
+          const lastCand = nonDateCandidates[nonDateCandidates.length - 1];
+          if (ParserModule.isPeriodCode(lastCand.raw)) {
+            const prior = nonDateCandidates[nonDateCandidates.length - 2];
+            return { amount: prior.amount, index: prior.index };
+          }
+          return { amount: lastCand.amount, index: lastCand.index };
+        }
+        return { amount: nonDateCandidates[nonDateCandidates.length - 1].amount, index: nonDateCandidates[nonDateCandidates.length - 1].index };
       },
       
       extractDays: (row, startIdx, amountIdx) => {
@@ -318,6 +502,27 @@
         return '0:0';
       },
 
+      extractControlTotal: (cells, startIdx, endIdx, labelRegex) => {
+        for (let k = endIdx - 1; k > startIdx; k--) {
+          const val = cells[k];
+          if (val != null && val !== '' && !ParserModule.isHourValue(val) && ParserModule.isAmount(val)) {
+            return ParserModule.parseNum(val);
+          }
+        }
+        const text = String(cells[startIdx] ?? '').trim();
+        const afterLabel = text.replace(labelRegex, '').trim().replace(/^[-:]\s*/, '');
+        if (afterLabel) {
+          const hourMatch = afterLabel.match(/\d+:\d+\s+(.*)$/);
+          const targetStr = hourMatch ? hourMatch[1].trim() : afterLabel;
+          if (ParserModule.isAmount(targetStr)) {
+            return ParserModule.parseNum(targetStr);
+          }
+          const m = targetStr.match(/(\d[\d\s\u00A0]*(?:[,.]\d+)?)\s*$/);
+          if (m) return ParserModule.parseNum(m[1]);
+        }
+        return null;
+      },
+
       parseGrid: (rows) => {
         const accruals = [];
         const deductions = [];
@@ -328,14 +533,16 @@
         const isAccrual = (c) => { 
           const lower = String(c ?? '').toLowerCase();
           if (!lower.trim()) return false;
-          if (lower.match(/зсу|благодійн|виплат|виплачено|утриман|дохід|разом/)) return false; 
+          if (lower.match(/зсу|благодійн|виплат|виплачено|утриман|податок|пдфо|разом/)) return false; 
           return ParserModule.accrualKeywords.some(kw => lower.includes(kw)); 
         };
         
         const isDeduction = (c) => { 
           const lower = String(c ?? '').toLowerCase();
           if (!lower.trim()) return false;
-          return ParserModule.deductionKeywords.some(kw => lower.includes(kw)) && !lower.includes('разом'); 
+          if (lower.includes('разом')) return false;
+          if (/[пp][рp][оo]ф/i.test(lower)) return true;
+          return ParserModule.deductionKeywords.some(kw => lower.includes(kw)); 
         };
 
         for (const row of rows) {
@@ -343,16 +550,35 @@
           for (const cell of row) {
             const text = String(cell ?? '').trim();
             if (!text) continue;
+            
+            // 1. Пошук формату "за 08.2026" або "08.2026 р."
             const match = text.match(/за\s*(\d{1,2})\.(\d{4})/i) || text.match(/(\d{1,2})\.(\d{4})\s*р/i); 
             if (match) {
               period = { monthIdx: parseInt(match[1], 10) - 1, year: parseInt(match[2], 10) };
-            } else {
-              const yyyymmMatch = text.match(/\b(20\d{2})(0[1-9]|1[0-2])\b/);
-              if (yyyymmMatch && !period) {
-                period = { monthIdx: parseInt(yyyymmMatch[2], 10) - 1, year: parseInt(yyyymmMatch[1], 10) };
-              }
+              break;
             }
+            
+            // 2. Пошук формату YYYYMM (напр. 202608) або YYYY-MM
+            const yyyymmMatch = text.match(/\b(19\d{2}|20\d{2})[\/\-]?(0[1-9]|1[0-2])\b/);
+            if (yyyymmMatch && !period) {
+              period = { monthIdx: parseInt(yyyymmMatch[2], 10) - 1, year: parseInt(yyyymmMatch[1], 10) };
+            }
+            
+            // 3. Пошук текстових назв місяців (напр. "Серпень 2026", "за серпень 2026 р.", "березня 2025")
+            const monthNames = typeof MONTH_NAMES !== 'undefined' ? MONTH_NAMES : ["Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень", "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень"];
+            const monthGenitives = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
+            monthNames.forEach((mName, mIdx) => {
+              const gName = monthGenitives[mIdx];
+              const monthRegex = new RegExp(`(?<!\\p{L})(${mName}|${gName})(?!\\p{L})`, 'iu');
+              if (monthRegex.test(text)) {
+                const yearMatch = text.match(/\b(19\d{2}|20\d{2})\b/);
+                if (yearMatch && !period) {
+                  period = { monthIdx: mIdx, year: parseInt(yearMatch[1], 10) };
+                }
+              }
+            });
           }
+          if (period) break;
         }
 
         rows.forEach(row => {
@@ -360,14 +586,18 @@
           const cells = row.map(c => typeof c === 'string' ? c.trim() : c);
           if (!cells.some(c => c != null && c !== '')) return;
           
-          const fullRowText = cells.filter(c => c != null && c !== '').join(' ').toLowerCase();
-          if (fullRowText.includes('разом нараховано')) {
-             const m = fullRowText.match(/разом нараховано\s*[-:]?\s*(\d[\d\s]*[,.]\d+)/);
-             if (m) totalAccruedControl = ParserModule.parseNum(m[1]);
+          const accCtrlIdx = cells.findIndex(c => typeof c === 'string' && /(?:разом|всього|усього)\s*нараховано/i.test(c));
+          const dedCtrlIdx = cells.findIndex(c => typeof c === 'string' && /(?:разом|всього|усього)\s*утримано/i.test(c));
+
+          if (accCtrlIdx !== -1) {
+            const endLimit = (dedCtrlIdx !== -1 && dedCtrlIdx > accCtrlIdx) ? dedCtrlIdx : cells.length;
+            const val = ParserModule.extractControlTotal(cells, accCtrlIdx, endLimit, /(?:разом|всього|усього)\s*нараховано/i);
+            if (val !== null) totalAccruedControl = val;
           }
-          if (fullRowText.includes('разом утримано')) {
-             const m = fullRowText.match(/разом утримано\s*[-:]?\s*(\d[\d\s]*[,.]\d+)/);
-             if (m) totalDeductedControl = ParserModule.parseNum(m[1]);
+          if (dedCtrlIdx !== -1) {
+            const endLimit = (accCtrlIdx !== -1 && accCtrlIdx > dedCtrlIdx) ? accCtrlIdx : cells.length;
+            const val = ParserModule.extractControlTotal(cells, dedCtrlIdx, endLimit, /(?:разом|всього|усього)\s*утримано/i);
+            if (val !== null) totalDeductedControl = val;
           }
 
           const accIdx = cells.findIndex(c => typeof c === 'string' && isAccrual(c));
@@ -375,23 +605,23 @@
 
           if (accIdx !== -1) {
             const endLimit = (dedIdx !== -1 && dedIdx > accIdx) ? dedIdx : cells.length;
-            const amountResult = ParserModule.findBestAmount(cells, accIdx + 1, endLimit);
+            const amountResult = ParserModule.findBestAmount(cells, accIdx + 1, endLimit, period);
             const amount = amountResult.amount;
             const days = ParserModule.extractDays(cells, accIdx + 1, amountResult.index);
             const hours = ParserModule.extractHours(cells, accIdx + 1, endLimit);
 
-            if (amount > 0) {
-              let name = ParserModule.sanitizeName(cells[accIdx]);
-              if (name.toLowerCase().includes('надб') && name.toLowerCase().includes('стаж')) name = 'Надбавка за стаж в енергетиці';
+            if (amount !== 0 || days > 0) {
+              const name = ParserModule.sanitizeName(cells[accIdx]);
               accruals.push({ id: generateId(), name, percent: '', days, hours, amount });
             }
           }
 
           if (dedIdx !== -1) {
-            const amountResult = ParserModule.findDeductionAmount(cells, dedIdx + 1);
+            const endLimitDed = (accIdx !== -1 && accIdx > dedIdx) ? accIdx : cells.length;
+            const amountResult = ParserModule.findDeductionAmount(cells, dedIdx + 1, endLimitDed, period);
             const amount = amountResult.amount;
 
-            if (amount > 0) {
+            if (amount !== 0) {
               const name = ParserModule.sanitizeName(cells[dedIdx]);
               deductions.push({ id: generateId(), name, amount });
             }
@@ -459,8 +689,11 @@
       const dbData = _dbData;
       
       const setDbData = useCallback((newData) => {
-        _setDbData(newData);
-        setHasUnexportedChanges(true);
+        const success = _setDbData(newData);
+        if (success !== false) {
+          setHasUnexportedChanges(true);
+        }
+        return success;
       }, [_setDbData]);
 
       const { liveRate, rateTimestamp, historicalRates, isLoadingRate, isOfflineRate } = useExchangeRates(dbData);
@@ -474,6 +707,14 @@
           setToasts(prev => prev.filter(t => t.id !== id));
         }, 4000);
       }, []);
+
+      useEffect(() => {
+        const handleStorageErr = () => {
+          showToast("Помилка збереження даних: пам'ять браузера вичерпано або доступ заборонено", "error");
+        };
+        window.addEventListener('salaryhub-storage-error', handleStorageErr);
+        return () => window.removeEventListener('salaryhub-storage-error', handleStorageErr);
+      }, [showToast]);
 
       useEffect(() => {
         if (theme === 'dark') document.documentElement.classList.add('dark');
@@ -509,10 +750,10 @@
 
       const generateDummyData = useCallback(() => {
         const dummySlips = [
-            { id: '2026-03', month: 3, year: 2026, monthName: 'Березень', accruals: [{id: generateId(), name: 'Посадовий оклад', amount: 32000, days: 21, hours: '168:0'}, {id: generateId(), name: 'Премія за результатами роботи', percent: '20%', amount: 6400, days: 0, hours: '0:0'}], deductions: [{id: generateId(), name: 'Плановий аванс', amount: 15000}, {id: generateId(), name: 'Податок з доходів', amount: 6912}, {id: generateId(), name: 'Військовий збір', amount: 576}] },
-            { id: '2026-02', month: 2, year: 2026, monthName: 'Лютий', accruals: [{id: generateId(), name: 'Посадовий оклад', amount: 32000, days: 20, hours: '160:0'}, {id: generateId(), name: 'Щорічна відпустка', amount: 8500, days: 5, hours: '0:0'}], deductions: [{id: generateId(), name: 'Плановий аванс', amount: 12000}, {id: generateId(), name: 'Податок з доходів', amount: 7290}, {id: generateId(), name: 'Військовий збір', amount: 607.5}] },
-            { id: '2026-01', month: 1, year: 2026, monthName: 'Січень', accruals: [{id: generateId(), name: 'Посадовий оклад', amount: 32000, days: 22, hours: '176:0'}, {id: generateId(), name: 'Премія річна', amount: 15000, days: 0, hours: '0:0'}], deductions: [{id: generateId(), name: 'Плановий аванс', amount: 15000}, {id: generateId(), name: 'Податок з доходів', amount: 8460}, {id: generateId(), name: 'Військовий збір', amount: 705}] },
-            { id: '2025-03', month: 3, year: 2025, monthName: 'Березень', accruals: [{id: generateId(), name: 'Посадовий оклад', amount: 28000, days: 21, hours: '168:0'}], deductions: [{id: generateId(), name: 'Плановий аванс', amount: 12000}, {id: generateId(), name: 'Податок з доходів', amount: 5040}, {id: generateId(), name: 'Військовий збір', amount: 420}] },
+            { id: '2026-03', month: 3, year: 2026, monthName: 'Березень', accruals: [{id: generateId(), name: 'Посадовий оклад', amount: 32000, days: 21, hours: '168:0'}, {id: generateId(), name: 'Премія за результатами роботи', percent: '20%', amount: 6400, days: 0, hours: '0:0'}], deductions: [{id: generateId(), name: 'Плановий аванс', amount: 15000}, {id: generateId(), name: 'Податок з доходів', amount: 6912}, {id: generateId(), name: 'Військовий збір', amount: 1920}] },
+            { id: '2026-02', month: 2, year: 2026, monthName: 'Лютий', accruals: [{id: generateId(), name: 'Посадовий оклад', amount: 32000, days: 20, hours: '160:0'}, {id: generateId(), name: 'Щорічна відпустка', amount: 8500, days: 5, hours: '0:0'}], deductions: [{id: generateId(), name: 'Плановий аванс', amount: 12000}, {id: generateId(), name: 'Податок з доходів', amount: 7290}, {id: generateId(), name: 'Військовий збір', amount: 2025}] },
+            { id: '2026-01', month: 1, year: 2026, monthName: 'Січень', accruals: [{id: generateId(), name: 'Посадовий оклад', amount: 32000, days: 22, hours: '176:0'}, {id: generateId(), name: 'Премія річна', amount: 15000, days: 0, hours: '0:0'}], deductions: [{id: generateId(), name: 'Плановий аванс', amount: 15000}, {id: generateId(), name: 'Податок з доходів', amount: 8460}, {id: generateId(), name: 'Військовий збір', amount: 2350}] },
+            { id: '2025-03', month: 3, year: 2025, monthName: 'Березень', accruals: [{id: generateId(), name: 'Посадовий оклад', amount: 28000, days: 21, hours: '168:0'}], deductions: [{id: generateId(), name: 'Плановий аванс', amount: 12000}, {id: generateId(), name: 'Податок з доходів', amount: 5040}, {id: generateId(), name: 'Військовий збір', amount: 1400}] },
         ];
         setDbData(dummySlips);
         showToast("Демо-дані завантажено! Досліджуйте.", "success");
@@ -520,31 +761,31 @@
       }, [setDbData, showToast, handleTabChange]);
 
       useEffect(() => {
-        const sortedData = [...dbData].sort((a, b) => a.id.localeCompare(b.id));
+        const sortedData = [...dbData].filter(d => d && d.id).sort((a, b) => String(a.id).localeCompare(String(b.id)));
         if (sortedData.length > 0 && (!selectedMonthId || !sortedData.find(d => d.id === selectedMonthId))) {
           setSelectedMonthId(sortedData[sortedData.length - 1].id);
         }
       }, [dbData, selectedMonthId]);
 
       const summaryData = useMemo(() => {
-        const sortedDbData = [...dbData].sort((a, b) => b.id.localeCompare(a.id)); 
+        const sortedDbData = [...dbData].filter(d => d && d.id).sort((a, b) => String(b.id).localeCompare(String(a.id))); 
         
         const baseData = sortedDbData.map((month, index, array) => {
-          const validAccruals = month.accruals.filter(a => !a.name.toLowerCase().match(/виплачен[оі].*відпускн/)).map(a => {
-               if (a.name.toLowerCase().includes('надб') && a.name.toLowerCase().includes('стаж') && a.name.toLowerCase().includes('енерг')) return { ...a, name: 'Надбавка за стаж в енергетиці' };
-               return a;
-          });
-          const validDeductions = month.deductions;
+          const validAccruals = (month.accruals || []).filter(a => a && a.name && !String(a.name).toLowerCase().match(/виплачен[оі].*відпускн/));
+          const validDeductions = month.deductions || [];
 
-          const totalAccrued = validAccruals.reduce((sum, item) => sum + Number(item.amount), 0);
-          const totalDeducted = validDeductions.reduce((sum, item) => sum + Number(item.amount), 0);
+          const totalAccrued = validAccruals.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+          const totalDeducted = validDeductions.reduce((sum, item) => sum + Number(item.amount || 0), 0);
           
           const totalBonuses = validAccruals
             .filter(a => a.name.toLowerCase().includes('премі') && !a.name.toLowerCase().includes('за рік') && !a.name.toLowerCase().includes('річн'))
             .reduce((sum, item) => sum + Number(item.amount), 0);
             
           const otherBonuses = validAccruals
-            .filter(a => a.name.toLowerCase().includes('матеріал') || a.name.toLowerCase().includes('допомог'))
+            .filter(a => {
+              const l = a.name.toLowerCase();
+              return l.includes('матеріал') || l.includes('допомог') || l.includes('допом') || l.includes('оздор');
+            })
             .reduce((sum, item) => sum + Number(item.amount), 0);
 
           let prevMonthVacationPayout = 0; let calculatedBonusPercent = null; let bonusPercentNumeric = 0;
@@ -555,7 +796,7 @@
             const diffMonths = (currDate.getFullYear() - prevDate.getFullYear()) * 12 + (currDate.getMonth() - prevDate.getMonth());
             
             if (diffMonths === 1) {
-              const vacationInDeductions = prevMonth.deductions.filter(d => d.name.toLowerCase().match(/виплачен[оі].*відпускн/)).reduce((sum, item) => sum + Number(item.amount), 0);
+              const vacationInDeductions = prevMonth.deductions.filter(d => (d.name.toLowerCase().match(/виплачен[оі].*відпускн/) || d.name.toLowerCase().match(/відпускн.*виплат/)) && !d.name.toLowerCase().includes('лікарнян')).reduce((sum, item) => sum + Number(item.amount), 0);
               const vacationInAccruals = prevMonth.accruals.filter(a => a.name.toLowerCase().match(/виплачен[оі].*відпускн/)).reduce((sum, item) => sum + Number(item.amount), 0);
               prevMonthVacationPayout = vacationInDeductions + vacationInAccruals;
 
@@ -569,21 +810,46 @@
             }
           }
 
-          const advanceSum = validDeductions.filter(d => d.name.toLowerCase().match(/аванс/)).reduce((sum, item) => sum + Number(item.amount), 0);
-          
-          const vacationPayoutDeductions = validDeductions.filter(d => d.name.toLowerCase().match(/виплачен[оі].*(відпускн|лікарнян)/));
-          const vacationPayoutSum = vacationPayoutDeductions.reduce((sum, item) => sum + Number(item.amount), 0);
-          
-          const regularPayoutSum = validDeductions.filter(d => d.name.toLowerCase().match(/виплат|виплачено/) && !d.name.toLowerCase().match(/відпускн|лікарнян/)).reduce((sum, item) => sum + Number(item.amount), 0);
-          const payoutSum = regularPayoutSum + vacationPayoutSum;
-          
-          const explicitBankSum = validDeductions.filter(d => d.name.toLowerCase().match(/перерахування|банк|картк|о\/р/)).reduce((sum, item) => sum + Number(item.amount), 0);
-          const taxes = validDeductions.filter(d => !d.name.toLowerCase().match(/аванс|виплат|виплачено|перерахування|банк|картк|о\/р/)).reduce((sum, item) => sum + Number(item.amount), 0);
-            
-          const calculatedBankRemainder = Math.max(totalAccrued - taxes - advanceSum - payoutSum, 0);
+          // Коректне визначення каналів виплати за допомогою єдиної класифікації
+          const advanceSum = validDeductions
+            .filter(d => classifyDeduction(d.name).isAdvance)
+            .reduce((sum, item) => sum + Number(item.amount), 0);
+
+          const vacationPayoutSum = validDeductions
+            .filter(d => classifyDeduction(d.name).isVacation)
+            .reduce((sum, item) => sum + Number(item.amount), 0);
+
+          const sickPayoutSum = validDeductions
+            .filter(d => classifyDeduction(d.name).isSick)
+            .reduce((sum, item) => sum + Number(item.amount), 0);
+
+          // Регулярні виплати виключають банківські перекази та аванси, щоб уникнути подвійного обліку
+          const regularPayoutSum = validDeductions
+            .filter(d => classifyDeduction(d.name).isRegularPayout)
+            .reduce((sum, item) => sum + Number(item.amount), 0);
+
+          const explicitBankSum = validDeductions
+            .filter(d => classifyDeduction(d.name).isBank)
+            .reduce((sum, item) => sum + Number(item.amount), 0);
+
+          const taxes = validDeductions
+            .filter(d => classifyDeduction(d.name).isTax)
+            .reduce((sum, item) => sum + Number(item.amount), 0);
+
+          const payoutSum = regularPayoutSum + vacationPayoutSum + sickPayoutSum;
+
+          // Розрахунковий залишок до виплати через банк (без штучного Math.max, коректно відображає сторно/борг)
+          const calculatedBankRemainder = totalAccrued - taxes - advanceSum - regularPayoutSum - vacationPayoutSum - sickPayoutSum;
           const toBank = explicitBankSum > 0 ? explicitBankSum : calculatedBankRemainder;
-          
-          const rawNetPay = advanceSum + regularPayoutSum + vacationPayoutSum + toBank;
+
+          // Фактично зафіксовані виплати за розрахунковим листком (без припущень про банк, якщо виплати не було)
+          const paidBySlipSum = advanceSum + regularPayoutSum + vacationPayoutSum + sickPayoutSum + explicitBankSum;
+          const hasExplicitBankPayout = explicitBankSum > 0;
+
+          // Розрахунковий чистий дохід (касовий)
+          const rawNetPay = advanceSum + regularPayoutSum + vacationPayoutSum + sickPayoutSum + toBank;
+          // Зароблений чистий дохід (нараховано мінус податки, без штучного Math.max)
+          const earnedNetPay = totalAccrued - taxes;
           
           let okladAmount = 0; let okladHours = 0; let stazhAmount = 0;
           
@@ -597,15 +863,19 @@
                 else { okladHours += parseFloat(hoursStr) || 0; }
               }
             }
-            if (lowerName.includes('стаж в енергетиці')) stazhAmount += Number(a.amount);
+            if (/(?:вислуг|стаж)/i.test(lowerName)) stazhAmount += Number(a.amount);
           });
           const hourlyRate = okladHours > 0 ? ((okladAmount + stazhAmount) / okladHours) : 0;
-          const hasVacation = validAccruals.some(a => a.name.toLowerCase().includes('щорічна відпуст'));
+          const hasVacation = validAccruals.some(a => { 
+            const n = a.name.toLowerCase(); 
+            return (n.includes('відпуст') || n.includes('відпуск')) && !n.includes('донор'); 
+          });
 
-          const actualRate = historicalRates[month.id] || 40.0;
+          const isFallbackRate = !historicalRates[month.id];
+          const actualRate = historicalRates[month.id] || liveRate || 41.5;
           
           const calcPdfo = totalAccrued * 0.18;
-          const vzRate = month.year < 2024 || (month.year === 2024 && month.month < 12) ? 0.015 : 0.05; 
+          const vzRate = getMilitaryTaxRate(month.year, month.month, false); 
           const calcVz = totalAccrued * vzRate;
           
           let actualPdfo = 0;
@@ -626,19 +896,31 @@
 
           return { 
             ...month, accruals: validAccruals, deductions: validDeductions,
-            totalAccrued, totalDeducted, taxes, rawNetPay, toBank, advanceSum, payoutSum, regularPayoutSum, vacationPayoutSum, prevMonthVacationPayout, 
+            totalAccrued, totalDeducted, taxes, rawNetPay, earnedNetPay, toBank, explicitBankSum, paidBySlipSum, hasExplicitBankPayout, calculatedBankRemainder, advanceSum, payoutSum, regularPayoutSum, vacationPayoutSum, prevMonthVacationPayout, 
             totalBonuses, otherBonuses, hasVacation, calculatedBonusPercent, bonusPercentNumeric, hourlyRate,
             exchangeRate: actualRate,
+            isFallbackRate,
             taxWarnings
           };
         });
 
         const smoothedData = baseData.map((month, index, array) => {
            let smoothedNetPay = month.rawNetPay;
-           smoothedNetPay -= month.vacationPayoutSum;
+
+           // Rollover out: if vacation payout was an advance crossing boundary into the next consecutive month (array[index - 1])
+           // If current month has vacation accruals, the payout was for this month's vacation, so do not roll over.
+           const nextMonth = index > 0 ? array[index - 1] : null;
+           const isConsecutiveNext = nextMonth && ((nextMonth.year - month.year) * 12 + (nextMonth.month - month.month) === 1);
+           const rolloverOut = (isConsecutiveNext && month.vacationPayoutSum > 0 && !month.hasVacation) ? month.vacationPayoutSum : 0;
+           smoothedNetPay -= rolloverOut;
+
+           // Rollover in: if previous consecutive month (array[index + 1]) paid vacation advance crossing into this month
            if (index < array.length - 1) {
-              const prevMonthInArray = array[index + 1];
-              smoothedNetPay += prevMonthInArray.vacationPayoutSum;
+              const prevMonth = array[index + 1];
+              const isConsecutivePrev = ((month.year - prevMonth.year) * 12 + (month.month - prevMonth.month) === 1);
+              if (isConsecutivePrev && prevMonth.vacationPayoutSum > 0 && !prevMonth.hasVacation) {
+                 smoothedNetPay += prevMonth.vacationPayoutSum;
+              }
            }
            return { ...month, smoothedNetPay };
         });
@@ -665,7 +947,7 @@
               hourlyRateForeign
            };
         });
-      }, [dbData, historicalRates, smoothingMode]);
+      }, [dbData, historicalRates, liveRate, smoothingMode]);
 
       const deletePayslip = useCallback((idToDelete) => {
         setDbData(prev => prev.filter(d => d.id !== idToDelete)); showToast("Розрахунковий лист видалено", "success");
@@ -833,14 +1115,14 @@
             {mode === 'hourly' ? (
               <>
                 <div className="flex justify-between items-center gap-4 mt-1"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-cyan-500"></div><span className="text-slate-400 font-medium">За годину (₴)</span></div><span className="font-bold text-white font-mono">{isPrivateMode ? '***' : formatCurrency(pointData.hourlyRate)}</span></div>
-                <div className="flex justify-between items-center gap-4"><div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-400"></div><span className="text-slate-400 font-medium">За годину ({currencySymbol})</span></div><span className="font-bold text-slate-200 font-mono">{isPrivateMode ? '***' : formatCurrency(pointData.hourlyRateForeign, 'USD')}</span></div>
+                <div className="flex justify-between items-center gap-4"><div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-400"></div><span className="text-slate-400 font-medium">За годину ({currencySymbol}){pointData.isFallbackRate ? ' ~' : ''}</span></div><span className="font-bold text-slate-200 font-mono" title={pointData.isFallbackRate ? `Орієнтовний курс (fallback): ${Number(pointData.exchangeRate).toFixed(2)}` : `Курс НБУ: ${Number(pointData.exchangeRate).toFixed(2)}`}>{pointData.isFallbackRate ? '~ ' : ''}{isPrivateMode ? '***' : formatCurrency(pointData.hourlyRateForeign, 'USD')}</span></div>
               </>
             ) : mode === 'bonus' ? (
               <div className="flex justify-between items-center gap-4 mt-1"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-purple-500"></div><span className="text-slate-400 font-medium">Премія</span></div><span className="font-bold text-white font-mono">{isPrivateMode ? '***' : (pointData.calculatedBonusPercent || '0%')}</span></div>
             ) : (
               <>
                 <div className="flex justify-between items-center gap-4 mt-1"><div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div><span className="text-slate-400 font-medium">В гривнях (₴)</span></div><span className="font-bold text-white font-mono">{isPrivateMode ? '***' : formatCurrency(pointData.netPay)}</span></div>
-                <div className="flex justify-between items-center gap-4"><div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-400"></div><span className="text-slate-400 font-medium">USD ({currencySymbol})</span></div><span className="font-bold text-slate-200 font-mono">{isPrivateMode ? '***' : formatCurrency(pointData.foreignEquivalent, 'USD')}</span></div>
+                <div className="flex justify-between items-center gap-4"><div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-400"></div><span className="text-slate-400 font-medium">USD ({currencySymbol}){pointData.isFallbackRate ? ' ~' : ''}</span></div><span className="font-bold text-slate-200 font-mono" title={pointData.isFallbackRate ? `Орієнтовний курс (fallback): ${Number(pointData.exchangeRate).toFixed(2)}` : `Курс НБУ: ${Number(pointData.exchangeRate).toFixed(2)}`}>{pointData.isFallbackRate ? '~ ' : ''}{isPrivateMode ? '***' : formatCurrency(pointData.foreignEquivalent, 'USD')}</span></div>
                 {pointData.calculatedBonusPercent && (
                   <div className="flex justify-between items-center gap-4 pt-1.5 mt-0.5 border-t border-slate-700/50 dark:border-slate-600/50">
                     <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-purple-500"></div><span className="text-slate-400 font-medium">Премія</span></div>
@@ -911,7 +1193,9 @@
 
       const handleChartClick = (e) => {
         if (e && e.activePayload && e.activePayload.length > 0) {
-           onPointClick(e.activePayload[0].payload.id);
+           if (typeof onPointClick === 'function') {
+             onPointClick(e.activePayload[0].payload.id);
+           }
         }
       };
 
@@ -1029,26 +1313,39 @@
       
       const [selectedYear, setSelectedYear] = useState(() => {
         const today = new Date();
-        const currentMonthIdx = today.getMonth(); 
         const currentYearStr = today.getFullYear().toString();
-        
-        if (currentMonthIdx >= 3) {
-          return currentYearStr;
+        if (summaryData && summaryData.length > 0) {
+          const aYears = [...new Set(summaryData.map(d => Number(d?.year)).filter(Boolean))].sort((a, b) => b - a);
+          if (aYears.map(String).includes(currentYearStr) && today.getMonth() >= 3) {
+            return currentYearStr;
+          }
+          return aYears[0] ? aYears[0].toString() : 'all';
         }
-        return 'all';
+        return today.getMonth() >= 3 ? currentYearStr : 'all';
       });
+
+      useEffect(() => {
+        if (summaryData && summaryData.length > 0) {
+          const aYears = [...new Set(summaryData.map(d => Number(d?.year)).filter(Boolean))].sort((a, b) => b - a);
+          if (selectedYear !== 'all' && !aYears.map(String).includes(selectedYear)) {
+            setSelectedYear(aYears[0] ? aYears[0].toString() : 'all');
+          }
+        }
+      }, [summaryData, selectedYear]);
 
       const [chartMode, setChartMode] = useState('income');
       const currencySymbol = '$';
-      const [scrollTop, setScrollTop] = useState(0);
 
       const { dashboardData, avgEarnedUAH, avgEarnedForeign, minNetPay, maxNetPay, availableYears } = useMemo(() => {
-        const aYears = [...new Set(summaryData.map(d => d.year))].sort((a, b) => b - a);
-        const dashData = selectedYear === 'all' ? summaryData : summaryData.filter(d => d.year.toString() === selectedYear);
-        const avgUAH = dashData.length ? dashData.reduce((sum, m) => sum + m.netPay, 0) / dashData.length : 0;
-        const avgForeign = dashData.length ? dashData.reduce((sum, m) => sum + m.foreignEquivalent, 0) / dashData.length : 0;
-        const minNet = dashData.length ? Math.min(...dashData.map(d => d.netPay)) : 0;
-        const maxNet = dashData.length ? Math.max(...dashData.map(d => d.netPay)) : 0;
+        const aYears = [...new Set(summaryData.map(d => Number(d?.year)).filter(Boolean))].sort((a, b) => b - a);
+        const effectiveYear = (selectedYear !== 'all' && !aYears.map(String).includes(selectedYear))
+          ? (aYears[0] ? aYears[0].toString() : 'all')
+          : selectedYear;
+        const dashData = effectiveYear === 'all' ? summaryData : summaryData.filter(d => String(d?.year || '') === effectiveYear);
+        const avgUAH = dashData.length ? dashData.reduce((sum, m) => sum + (Number(m.netPay) || 0), 0) / dashData.length : 0;
+        const avgForeign = dashData.length ? dashData.reduce((sum, m) => sum + (Number(m.foreignEquivalent) || 0), 0) / dashData.length : 0;
+        const minNet = dashData.length ? Math.min(...dashData.map(d => Number(d.netPay) || 0)) : 0;
+        const maxNet = dashData.length ? Math.max(...dashData.map(d => Number(d.netPay) || 0)) : 0;
         return { dashboardData: dashData, avgEarnedUAH: avgUAH, avgEarnedForeign: avgForeign, minNetPay: minNet, maxNetPay: maxNet, availableYears: aYears };
       }, [summaryData, selectedYear]);
 
@@ -1056,8 +1353,10 @@
         if (summaryData.length === 0) return [];
         const monthStats = Array.from({ length: 12 }, (_, i) => ({ monthName: MONTH_NAMES[i], shortName: MONTH_NAMES[i].slice(0,3), total: 0, count: 0 }));
         summaryData.forEach(d => {
-            monthStats[d.month - 1].total += d.netPay;
-            monthStats[d.month - 1].count += 1;
+            if (d && d.month >= 1 && d.month <= 12 && monthStats[d.month - 1]) {
+              monthStats[d.month - 1].total += Number(d.netPay) || 0;
+              monthStats[d.month - 1].count += 1;
+            }
         });
         return monthStats.map(m => ({
             month: m.shortName,
@@ -1146,29 +1445,52 @@
         return rows;
       }, [dashboardData, selectedYear]);
 
-      const ROW_HEIGHT = 74; 
-      const HEADER_HEIGHT = 44; 
-      const OVERSCAN = 250; 
+      const handleChartPointClick = (id) => {
+        setSelectedMonthId(id);
+        handleTabChange('payslips');
+      };
 
-      const { virtualItems, totalHeight } = useMemo(() => {
-        let currentTop = 0;
-        const positions = flatRows.map(item => {
-           const h = item.type === 'header' ? HEADER_HEIGHT : ROW_HEIGHT;
-           const pos = { ...item, top: currentTop, height: h };
-           currentTop += h;
-           return pos;
+      const renderTableRows = () => {
+        return flatRows.map((item) => {
+          if (item.type === 'header') {
+            return (
+              <tr key={item.id} className="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 backdrop-blur-sm">
+                <td colSpan="5" className="px-6 py-2.5 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">{item.year} рік</td>
+              </tr>
+            );
+          }
+          const row = item.row;
+          return (
+            <motion.tr variants={tableRowVariants} key={row.id} className="hover:bg-blue-50/60 dark:hover:bg-slate-700/50 transition-colors duration-300 ease-in-out border-b border-slate-100 dark:border-slate-700/50 last:border-0 group">
+              <td className="px-6 py-4 font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                <div className="flex items-center gap-2">
+                  <span>{row.monthName} <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">{selectedYear !== 'all' ? row.year : ''}</span></span>
+                  {row.hasVacation && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800">ВІДПУСТКА</span>}
+                </div>
+              </td>
+              <td className="px-6 py-4 text-right font-bold tabular-nums whitespace-nowrap font-mono tracking-tight" style={getTextColorGradient(row.netPay, minNetPay, maxNetPay, theme)}>
+                <PrivacyText text={formatCurrency(row.netPay)} />
+              </td>
+              <td className="px-6 py-4 text-blue-600 dark:text-blue-400 font-bold tabular-nums text-right whitespace-nowrap font-mono tracking-tight">
+                <span title={row.isFallbackRate ? `Орієнтовний курс (fallback): ${Number(row.exchangeRate).toFixed(2)}` : `Курс НБУ: ${Number(row.exchangeRate).toFixed(2)}`} className={`border-b border-dashed pb-0.5 cursor-help ${row.isFallbackRate ? 'border-amber-400 dark:border-amber-500 text-amber-600 dark:text-amber-400' : 'border-blue-200 dark:border-blue-800/50'}`}>
+                  {row.isFallbackRate && <span className="mr-0.5 font-bold" title="Орієнтовний курс (fallback)">~ </span>}
+                  <PrivacyText text={formatCurrency(row.foreignEquivalent, 'USD')} />
+                </span>
+              </td>
+              <td className="px-6 py-4 text-center tabular-nums whitespace-nowrap font-mono">
+                {row.calculatedBonusPercent ? <span className="font-bold text-purple-600 dark:text-purple-400">{row.calculatedBonusPercent}</span> : <span className="text-slate-300 dark:text-slate-600">-</span>}
+              </td>
+              <td className="px-6 py-4 text-center whitespace-nowrap">
+                <div className="flex items-center justify-center gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity duration-300">
+                  <button onClick={() => { setSelectedMonthId(row.id); handleTabChange('payslips'); }} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-semibold text-sm transition-colors bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 px-3 py-1.5 rounded-lg">Корінець</button>
+                  <button onClick={() => startEditing(row.id)} className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 p-1.5 rounded-lg transition-colors" title="Редагувати" aria-label="Редагувати розрахунковий лист"><IconEdit /></button>
+                  <ConfirmDeleteButton onConfirm={() => deletePayslip(row.id)} />
+                </div>
+              </td>
+            </motion.tr>
+          );
         });
-
-        const startIdx = positions.findIndex(p => p.top + p.height > scrollTop - OVERSCAN);
-        const endIdx = positions.findIndex(p => p.top > scrollTop + 600 + OVERSCAN);
-
-        const start = Math.max(0, startIdx !== -1 ? startIdx : 0);
-        const end = endIdx !== -1 ? endIdx : positions.length - 1;
-
-        return { virtualItems: positions.slice(start, end + 1), totalHeight: currentTop };
-      }, [flatRows, scrollTop]);
-
-      const handleTableScroll = (e) => setScrollTop(e.target.scrollTop);
+      };
 
       if (dbData.length === 0) {
         return (
@@ -1221,46 +1543,6 @@
         }
       }
 
-      const handleChartPointClick = (id) => {
-        setSelectedMonthId(id);
-        handleTabChange('payslips');
-      };
-
-      const renderVirtualRows = () => {
-        const rows = [];
-        
-        const topSpacerHeight = virtualItems.length > 0 ? virtualItems[0].top : 0;
-        if (topSpacerHeight > 0) rows.push(<tr key="top-spacer" style={{ height: topSpacerHeight }}><td colSpan="5"></td></tr>);
-
-        virtualItems.forEach((item) => {
-          if (item.type === 'header') {
-            rows.push(<tr key={item.id} className="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 backdrop-blur-sm"><td colSpan="5" className="px-6 py-2.5 text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">{item.year} рік</td></tr>);
-          } else {
-            const row = item.row;
-            rows.push(
-              <motion.tr variants={tableRowVariants} key={row.id} className="hover:bg-blue-50/60 dark:hover:bg-slate-700/50 transition-colors duration-300 ease-in-out border-b border-slate-100 dark:border-slate-700/50 last:border-0 group">
-                <td className="px-6 py-4 font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap"><div className="flex items-center gap-2"><span>{row.monthName} <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">{selectedYear !== 'all' ? row.year : ''}</span></span>{row.hasVacation && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800">ВІДПУСТКА</span>}</div></td>
-                <td className="px-6 py-4 text-right font-bold tabular-nums whitespace-nowrap font-mono tracking-tight" style={getTextColorGradient(row.netPay, minNetPay, maxNetPay, theme)}><PrivacyText text={formatCurrency(row.netPay)} /></td>
-                <td className="px-6 py-4 text-blue-600 dark:text-blue-400 font-bold tabular-nums text-right whitespace-nowrap font-mono tracking-tight"><span title={`Курс: ${Number(row.exchangeRate).toFixed(2)}`} className="border-b border-dashed border-blue-200 dark:border-blue-800/50 pb-0.5 cursor-help"><PrivacyText text={formatCurrency(row.foreignEquivalent, 'USD')} /></span></td>
-                <td className="px-6 py-4 text-center tabular-nums whitespace-nowrap font-mono">{row.calculatedBonusPercent ? <span className="font-bold text-purple-600 dark:text-purple-400">{row.calculatedBonusPercent}</span> : <span className="text-slate-300 dark:text-slate-600">-</span>}</td>
-                <td className="px-6 py-4 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity duration-300">
-                    <button onClick={() => { setSelectedMonthId(row.id); handleTabChange('payslips'); }} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-semibold text-sm transition-colors bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 px-3 py-1.5 rounded-lg">Корінець</button>
-                    <button onClick={() => startEditing(row.id)} className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 p-1.5 rounded-lg transition-colors" title="Редагувати"><IconEdit /></button>
-                    <ConfirmDeleteButton onConfirm={() => deletePayslip(row.id)} />
-                  </div>
-                </td>
-              </motion.tr>
-            );
-          }
-        });
-
-        const bottomSpacerHeight = virtualItems.length > 0 ? totalHeight - (virtualItems[virtualItems.length - 1].top + virtualItems[virtualItems.length - 1].height) : 0;
-        if (bottomSpacerHeight > 0) rows.push(<tr key="bottom-spacer" style={{ height: bottomSpacerHeight }}><td colSpan="5"></td></tr>);
-
-        return rows;
-      };
-
       return (
         <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="space-y-6 max-w-6xl mx-auto pb-10">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 gap-4 transition-colors">
@@ -1284,7 +1566,7 @@
                 </div>
               </div>
               
-              <CustomSelect compact value={selectedYear} onChange={setSelectedYear} options={[{ value: 'all', label: 'За весь час' }, ...availableYears.map(y => ({ value: y.toString(), label: y.toString() }))]} prefix="Період:" wrapperClass="bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800/50 text-blue-900 dark:text-blue-200" />
+              <CustomSelect compact value={selectedYear} onChange={setSelectedYear} options={[{ value: 'all', label: 'За весь час' }, ...(availableYears || []).filter(Boolean).map(y => ({ value: String(y), label: String(y) }))]} prefix="Період:" wrapperClass="bg-blue-50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800/50 text-blue-900 dark:text-blue-200" />
             </div>
           </div>
 
@@ -1294,8 +1576,8 @@
               <div>
                 <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-1">Середній дохід в міс.</p>
                 <div className="flex flex-wrap items-baseline gap-2 md:gap-3">
-                  <h3 className="text-3xl font-black text-blue-600 dark:text-blue-400"><AnimatedNumber value={avgEarnedUAH} currency="UAH" /></h3>
-                  <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">~ <AnimatedNumber value={avgEarnedForeign} currency={'USD'} /></span>
+                  <h3 className="text-3xl font-black font-mono tabular-nums tracking-tight text-blue-600 dark:text-blue-400"><AnimatedNumber value={avgEarnedUAH} currency="UAH" /></h3>
+                  <span className="text-lg font-bold font-mono tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400">~ <AnimatedNumber value={avgEarnedForeign} currency={'USD'} /></span>
                 </div>
                 {yoyAvgNode}
               </div>
@@ -1311,17 +1593,17 @@
                   <div className="flex bg-slate-100 dark:bg-slate-900/80 p-1 rounded-xl transition-colors border border-slate-200 dark:border-slate-700/50">
                     <button 
                       onClick={() => setSmoothingMode('raw')} 
-                      className={`px-3 py-1.5 rounded-lg text-xs md:text-sm font-semibold transition-all ${smoothingMode === 'raw' ? 'bg-white dark:bg-slate-800 shadow-sm text-slate-800 dark:text-slate-200' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
+                      className={`px-3 py-1.5 rounded-lg text-xs md:text-sm transition-all ${smoothingMode === 'raw' ? 'bg-white dark:bg-slate-800 shadow-sm text-slate-900 dark:text-white font-bold' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium'}`}
                       title="Фактичний рух коштів по місяцях виплати"
                     >Фактичний (Касовий)</button>
                     <button 
                       onClick={() => setSmoothingMode('smoothed')} 
-                      className={`px-3 py-1.5 rounded-lg text-xs md:text-sm font-semibold transition-all ${smoothingMode === 'smoothed' ? 'bg-indigo-50 dark:bg-indigo-900/30 shadow-sm text-indigo-700 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
+                      className={`px-3 py-1.5 rounded-lg text-xs md:text-sm transition-all ${smoothingMode === 'smoothed' ? 'bg-white dark:bg-slate-800 shadow-sm text-slate-900 dark:text-white font-bold' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium'}`}
                       title="Відпускні розподілені за місяцями їх фактичного відпрацювання"
                     >Згладжений (Зароблений)</button>
                     <button 
                       onClick={() => setSmoothingMode('trend')} 
-                      className={`px-3 py-1.5 rounded-lg text-xs md:text-sm font-semibold transition-all ${smoothingMode === 'trend' ? 'bg-amber-50 dark:bg-amber-900/30 shadow-sm text-amber-700 dark:text-amber-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
+                      className={`px-3 py-1.5 rounded-lg text-xs md:text-sm transition-all ${smoothingMode === 'trend' ? 'bg-white dark:bg-slate-800 shadow-sm text-slate-900 dark:text-white font-bold' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium'}`}
                       title="Ковзне середнє за 3 місяці"
                     >Тренд (Ковзне середнє)</button>
                   </div>
@@ -1329,9 +1611,18 @@
 
                 {dashboardData.length > 1 && (
                   <div className="flex bg-slate-100 dark:bg-slate-900/80 p-1 rounded-xl transition-colors border border-slate-200 dark:border-slate-700/50">
-                    <button onClick={() => setChartMode('income')} className={`px-3 md:px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${chartMode === 'income' ? 'bg-white dark:bg-slate-800 shadow-sm text-blue-600 dark:text-blue-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}>Дохід</button>
-                    <button onClick={() => setChartMode('bonus')} className={`px-3 md:px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${chartMode === 'bonus' ? 'bg-white dark:bg-slate-800 shadow-sm text-purple-600 dark:text-purple-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}>Премії %</button>
-                    <button onClick={() => setChartMode('hourly')} className={`px-3 md:px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${chartMode === 'hourly' ? 'bg-white dark:bg-slate-800 shadow-sm text-cyan-600 dark:text-cyan-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}>За год.</button>
+                    <button onClick={() => setChartMode('income')} className={`px-3 md:px-4 py-1.5 rounded-lg text-sm transition-all flex items-center gap-1.5 ${chartMode === 'income' ? 'bg-white dark:bg-slate-800 shadow-sm text-slate-900 dark:text-white font-bold' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium'}`}>
+                      {chartMode === 'income' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>}
+                      Дохід
+                    </button>
+                    <button onClick={() => setChartMode('bonus')} className={`px-3 md:px-4 py-1.5 rounded-lg text-sm transition-all flex items-center gap-1.5 ${chartMode === 'bonus' ? 'bg-white dark:bg-slate-800 shadow-sm text-slate-900 dark:text-white font-bold' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium'}`}>
+                      {chartMode === 'bonus' && <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0"></span>}
+                      Премії %
+                    </button>
+                    <button onClick={() => setChartMode('hourly')} className={`px-3 md:px-4 py-1.5 rounded-lg text-sm transition-all flex items-center gap-1.5 ${chartMode === 'hourly' ? 'bg-white dark:bg-slate-800 shadow-sm text-slate-900 dark:text-white font-bold' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium'}`}>
+                      {chartMode === 'hourly' && <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shrink-0"></span>}
+                      За год.
+                    </button>
                   </div>
                 )}
               </div>
@@ -1397,7 +1688,7 @@
                                <span className="text-xl">📈</span>
                                <span className="font-semibold text-slate-700 dark:text-slate-200">Піковий місяць</span>
                            </div>
-                           <p className="text-sm text-slate-600 dark:text-slate-400 leading-snug">Історично <strong className="text-slate-800 dark:text-slate-100">{seasonalityInsights.best.fullMonth}</strong> приносить найбільший середній дохід (<span className="font-mono text-purple-600 dark:text-purple-400 font-bold">{formatCurrency(seasonalityInsights.best.average)}</span>).</p>
+                           <p className="text-sm text-slate-600 dark:text-slate-400 leading-snug">Історично <strong className="text-slate-800 dark:text-slate-100">{seasonalityInsights.best.fullMonth}</strong> приносить найбільший середній дохід (<span className="font-mono text-purple-600 dark:text-purple-400 font-bold"><PrivacyText text={formatCurrency(seasonalityInsights.best.average)} /></span>).</p>
                        </div>
                        
                        <div className="bg-white/60 dark:bg-slate-800/50 backdrop-blur-sm p-4 rounded-xl border border-white dark:border-slate-700/50 shadow-sm">
@@ -1405,7 +1696,7 @@
                                <span className="text-xl">📉</span>
                                <span className="font-semibold text-slate-700 dark:text-slate-200">Спад активності</span>
                            </div>
-                           <p className="text-sm text-slate-600 dark:text-slate-400 leading-snug">Найменш прибутковим у середньому є <strong className="text-slate-800 dark:text-slate-100">{seasonalityInsights.worst.fullMonth}</strong> (<span className="font-mono text-slate-600 dark:text-slate-400 font-bold">{formatCurrency(seasonalityInsights.worst.average)}</span>).</p>
+                           <p className="text-sm text-slate-600 dark:text-slate-400 leading-snug">Найменш прибутковим у середньому є <strong className="text-slate-800 dark:text-slate-100">{seasonalityInsights.worst.fullMonth}</strong> (<span className="font-mono text-slate-600 dark:text-slate-400 font-bold"><PrivacyText text={formatCurrency(seasonalityInsights.worst.average)} /></span>).</p>
                        </div>
                    </div>
               </div>
@@ -1414,13 +1705,13 @@
 
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-colors">
             <div className="p-5 md:p-6 border-b border-slate-100 dark:border-slate-700"><h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Зведена таблиця</h2></div>
-            <div className="overflow-x-auto overflow-y-auto max-h-[600px] no-scrollbar relative" onScroll={handleTableScroll}>
+            <div className="overflow-x-auto overflow-y-auto max-h-[600px] no-scrollbar relative">
               <table className="w-full text-left text-sm relative">
                 <thead className="bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur-md text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-30">
                   <tr><th className="px-6 py-4 font-semibold whitespace-nowrap">Місяць</th><th className="px-6 py-4 font-bold text-emerald-600 dark:text-emerald-500 text-right whitespace-nowrap">Зарплата</th><th className="px-6 py-4 font-bold text-blue-600 dark:text-blue-500 text-right whitespace-nowrap">USD ({currencySymbol})</th><th className="px-6 py-4 font-semibold text-center whitespace-nowrap">Премія</th><th className="px-6 py-4 font-semibold text-center whitespace-nowrap">Дія</th></tr>
                 </thead>
                 <motion.tbody variants={tableContainerVariants} initial="hidden" animate="show">
-                  {renderVirtualRows()}
+                  {renderTableRows()}
                 </motion.tbody>
               </table>
             </div>
@@ -1449,60 +1740,7 @@
         return () => document.removeEventListener('keydown', handleKeyDown);
       }, [summaryData, activeMonthData, setSelectedMonthId]);
 
-      if (!activeMonthData) return <div className="flex justify-center items-center h-64 text-slate-400">Немає даних.</div>;
-
-      const advanceSum = activeMonthData.advanceSum || 0;
-      const payoutSum = activeMonthData.payoutSum || 0;
-      const taxSum = activeMonthData.taxes || 0;
-
-      const trueDeductions = activeMonthData.deductions.filter(d => !d.name.toLowerCase().match(/аванс|виплат|перерахування|банк|картк|о\/р/));
-      const payoutItems = activeMonthData.deductions.filter(d => d.name.toLowerCase().match(/аванс|виплат|перерахування|банк|картк|о\/р/));
-
-      const trueDeductionsSum = trueDeductions.reduce((sum, item) => sum + Number(item.amount), 0);
-
-      const ACCRUAL_COLORS = { 'Оклад': '#3b82f6', 'Премія': '#a855f7', 'Відпускні': '#f59e0b', 'Інше': '#94a3b8' };
-      const DEDUCTION_PALETTE = ['#f43f5e', '#f97316', '#eab308', '#84cc16', '#06b6d4', '#6366f1', '#8b5cf6'];
-
-      const accrualCategories = { 'Оклад': 0, 'Премія': 0, 'Відпускні': 0, 'Інше': 0 };
-      activeMonthData.accruals.forEach(a => {
-          const name = a.name.toLowerCase();
-          if (name.includes('оклад') || name.includes('тариф')) accrualCategories['Оклад'] += Number(a.amount);
-          else if (name.includes('премі')) accrualCategories['Премія'] += Number(a.amount);
-          else if (name.includes('відпуст')) accrualCategories['Відпускні'] += Number(a.amount);
-          else accrualCategories['Інше'] += Number(a.amount);
-      });
-      const accrualPieData = Object.entries(accrualCategories).filter(([k, v]) => v > 0).map(([name, value]) => ({ name, value, color: ACCRUAL_COLORS[name] }));
-
-      const deductionPieData = [];
-      let colorIndex = 0;
-      activeMonthData.deductions.forEach(d => {
-          const name = d.name.toLowerCase();
-          if (name.includes('аванс') || name.includes('виплат') || name.includes('перерахування') || name.includes('картк') || name.includes('банк') || name.includes('о/р')) return;
-          
-          let displayName = d.name;
-          if (name.includes('податок')) displayName = 'ПДФО';
-          else if (name.includes('військов') || name.includes('вз')) displayName = 'Військ. збір';
-          else if (name.includes('проф')) displayName = 'Профвнески';
-          else if (displayName.length > 15) displayName = displayName.substring(0, 15) + '...';
-          
-          const existing = deductionPieData.find(item => item.name === displayName);
-          if (existing) existing.value += Number(d.amount);
-          else {
-              deductionPieData.push({ name: displayName, value: Number(d.amount), color: DEDUCTION_PALETTE[colorIndex % DEDUCTION_PALETTE.length] });
-              colorIndex++;
-          }
-      });
-      deductionPieData.sort((a, b) => b.value - a.value);
-
-      const totalAccrualPie = accrualPieData.reduce((sum, item) => sum + item.value, 0);
-      const totalDeductionPie = deductionPieData.reduce((sum, item) => sum + item.value, 0);
-
-      const activeIndex = summaryData.findIndex(m => m.id === activeMonthData.id);
-      const prevMonthData = summaryData[activeIndex + 1];
-      const nextMonthData = summaryData[activeIndex - 1];
-      const lastYearMonthData = summaryData.find(m => m.month === activeMonthData.month && m.year === activeMonthData.year - 1);
-      
-      const insights = useMemo(() => {
+            const insights = useMemo(() => {
         if (!activeMonthData || summaryData.length < 2) return [];
         
         const results = [];
@@ -1515,7 +1753,7 @@
         
         const maxTaxes = Math.max(...summaryData.map(d => d.taxes));
         if (activeMonthData.taxes === maxTaxes && maxTaxes > 0 && pastData.length > 0) {
-          results.push({ id: 'tax-record', type: 'neutral', icon: '🏛️', text: `Заплачено рекордну суму податків — ${formatCurrency(maxTaxes)}.` });
+          results.push({ id: 'tax-record', type: 'neutral', icon: '🏛️', text: <span>Заплачено рекордну суму податків — <PrivacyText text={formatCurrency(maxTaxes)} />.</span> });
         }
         
         const monthsWithBonuses = pastData.filter(d => d.totalBonuses > 0);
@@ -1537,6 +1775,65 @@
         
         return results;
       }, [activeMonthData, summaryData]);
+
+      if (!activeMonthData) return <div className="flex justify-center items-center h-64 text-slate-400">Немає даних.</div>;
+
+      const advanceSum = activeMonthData.advanceSum || 0;
+      const payoutSum = activeMonthData.payoutSum || 0;
+      const taxSum = activeMonthData.taxes || 0;
+
+      const safeDeductions = activeMonthData.deductions || [];
+      const safeAccruals = activeMonthData.accruals || [];
+
+      const trueDeductions = safeDeductions.filter(d => d && d.name && classifyDeduction(d.name).isTax);
+      const payoutItems = safeDeductions.filter(d => d && d.name && classifyDeduction(d.name).isPayout);
+
+      const trueDeductionsSum = trueDeductions.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+      const ACCRUAL_COLORS = { 'Оклад': '#3b82f6', 'Премія': '#a855f7', 'Відпускні': '#f59e0b', 'Інше': '#94a3b8' };
+      const DEDUCTION_PALETTE = ['#f43f5e', '#f97316', '#eab308', '#84cc16', '#06b6d4', '#6366f1', '#8b5cf6'];
+
+      const accrualCategories = { 'Оклад': 0, 'Премія': 0, 'Відпускні': 0, 'Інше': 0 };
+      safeAccruals.forEach(a => {
+          if (!a || !a.name) return;
+          const name = String(a.name).toLowerCase();
+          if (name.includes('оклад') || name.includes('тариф')) accrualCategories['Оклад'] += Number(a.amount || 0);
+          else if (name.includes('премі')) accrualCategories['Премія'] += Number(a.amount || 0);
+          else if (name.includes('відпуст')) accrualCategories['Відпускні'] += Number(a.amount || 0);
+          else accrualCategories['Інше'] += Number(a.amount || 0);
+      });
+      const accrualPieData = Object.entries(accrualCategories).filter(([k, v]) => v > 0).map(([name, value]) => ({ name, value, color: ACCRUAL_COLORS[name] }));
+
+      const deductionPieData = [];
+      let colorIndex = 0;
+      safeDeductions.forEach(d => {
+          if (!d || !d.name) return;
+          const name = String(d.name).toLowerCase();
+          if (classifyDeduction(d.name).isPayout) return;
+          
+          let displayName = d.name;
+          if (name.includes('податок')) displayName = 'ПДФО';
+          else if (name.includes('військов') || name.includes('вз')) displayName = 'Військ. збір';
+          else if (/[пp][рp][оo]ф/i.test(name) || name.includes('проф')) displayName = 'Профвнески';
+          else if (displayName.length > 15) displayName = displayName.substring(0, 15) + '...';
+          
+          const existing = deductionPieData.find(item => item.name === displayName);
+          if (existing) existing.value += Number(d.amount);
+          else {
+              deductionPieData.push({ name: displayName, value: Number(d.amount), color: DEDUCTION_PALETTE[colorIndex % DEDUCTION_PALETTE.length] });
+              colorIndex++;
+          }
+      });
+      deductionPieData.sort((a, b) => b.value - a.value);
+
+      const totalAccrualPie = accrualPieData.reduce((sum, item) => sum + item.value, 0);
+      const totalDeductionPie = deductionPieData.reduce((sum, item) => sum + item.value, 0);
+
+      const activeIndex = summaryData.findIndex(m => m.id === activeMonthData.id);
+      const prevMonthData = summaryData[activeIndex + 1];
+      const nextMonthData = summaryData[activeIndex - 1];
+      const lastYearMonthData = summaryData.find(m => m.month === activeMonthData.month && m.year === activeMonthData.year - 1);
+      
 
       let diffNode = null;
       if (prevMonthData) {
@@ -1588,6 +1885,7 @@
                 disabled={!prevMonthData}
                 className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 title="Попередній місяць (Стрілка вліво)"
+                aria-label="Попередній місяць"
               >
                 <IconChevronLeft />
               </button>
@@ -1597,6 +1895,7 @@
                 disabled={!nextMonthData}
                 className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 title="Наступний місяць (Стрілка вправо)"
+                aria-label="Наступний місяць"
               >
                 <IconChevronRight />
               </button>
@@ -1605,7 +1904,7 @@
 
           {insights.length > 0 && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 p-4 md:p-5 rounded-2xl border border-indigo-100 dark:border-indigo-800/30 flex items-start gap-3 md:gap-4 transition-colors">
-              <div className="text-xl md:text-2xl mt-0.5" style={{ filter: 'drop-shadow(0 2px 4px rgba(99, 102, 241, 0.4))' }}>💡</div>
+              <div className="p-2 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-xl shrink-0"><IconLightbulb /></div>
               <div className="flex-1">
                 <h3 className="text-sm font-bold text-indigo-900 dark:text-indigo-300 mb-2 uppercase tracking-wider">Аналітика місяця</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1622,21 +1921,18 @@
 
           {(activeMonthData.hasVacation || activeMonthData.vacationPayoutSum > 0) && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 p-4 md:p-5 rounded-2xl border border-amber-100 dark:border-amber-800/30 flex items-start gap-3 md:gap-4 transition-colors">
-              <div className="text-xl md:text-2xl mt-0.5" style={{ filter: 'drop-shadow(0 2px 4px rgba(245, 158, 11, 0.4))' }}>🌴</div>
+              <div className="p-2 bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-xl shrink-0"><IconPalmtree /></div>
               <div className="flex-1">
                 <h3 className="text-sm font-bold text-amber-900 dark:text-amber-300 mb-2 uppercase tracking-wider">Відпустка / Лікарняні</h3>
                 <div className="bg-white/60 dark:bg-slate-800/50 p-3 rounded-xl border border-white dark:border-slate-700/50 shadow-sm backdrop-blur-sm mb-2">
                   <span className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-snug block">
                     У цьому розрахунковому листі зафіксовано відпустку або лікарняні.
-                    {activeMonthData.vacationPayoutSum > 0 && ` Загальна сума авансової виплати (утримання): ${formatCurrency(activeMonthData.vacationPayoutSum, 'UAH')}.`}
+                    {activeMonthData.vacationPayoutSum > 0 && <span> Загальна сума авансової виплати (утримання): <PrivacyText text={formatCurrency(activeMonthData.vacationPayoutSum, 'UAH')} />.</span>}
                   </span>
                 </div>
-                <p className="text-xs text-amber-800 dark:text-amber-400 font-medium leading-relaxed mb-3">
+                <p className="text-xs text-amber-800 dark:text-amber-400 font-medium leading-relaxed">
                   Частина виплати покриває дні наступного місяця. У режимі 'Згладжений дохід' графік вирівнює цю суму, щоб показати реальну зароблену (а не касову) суму за кожен місяць.
                 </p>
-                <button onClick={() => handleTabChange('vacation')} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm">
-                  🧳 Розрахувати вигідність наступної відпустки →
-                </button>
               </div>
             </motion.div>
           )}
@@ -1689,7 +1985,7 @@
                     <div>
                       <p className="font-bold mb-0.5">Можлива неточність в податках:</p>
                       <ul className="list-disc list-inside font-mono text-[11px]">
-                        {activeMonthData.taxWarnings.map((w, i) => <li key={i}>{w}</li>)}
+                        {activeMonthData.taxWarnings.map((w, i) => <li key={i}><PrivacyText text={w} /></li>)}
                       </ul>
                     </div>
                   </div>
@@ -1839,8 +2135,12 @@
                         <span className="text-emerald-400 font-bold font-mono tracking-tight">+<PrivacyText text={formatCurrency(activeMonthData.totalAccrued, 'UAH')} /></span>
                       </div>
                       <div className="flex justify-between items-center py-3 border-b border-slate-700/50">
-                        <div className="flex flex-col"><span className="text-slate-300 font-medium">Сумарні утримання</span><span className="text-xs text-slate-500">Податки, збори</span></div>
+                        <div className="flex flex-col"><span className="text-slate-300 font-medium">Сумарні утримання</span><span className="text-xs text-slate-500">Податки, збори, профвнески</span></div>
                         <span className="text-rose-400 font-bold font-mono tracking-tight">-<PrivacyText text={formatCurrency(taxSum, 'UAH')} /></span>
+                      </div>
+                      <div className="flex justify-between items-center py-3 border-b border-slate-700/50 bg-blue-950/30 -mx-2 px-2 rounded-lg">
+                        <div className="flex flex-col"><span className="text-blue-300 font-semibold">Зароблений чистий дохід</span><span className="text-xs text-slate-400">Нараховано мінус утримання (без виплат)</span></div>
+                        <span className="text-blue-400 font-bold font-mono tracking-tight"><PrivacyText text={formatCurrency(activeMonthData.earnedNetPay, 'UAH')} /></span>
                       </div>
                       <div className="flex justify-between items-center py-3 border-b border-slate-700/50">
                         <div className="flex flex-col"><span className="text-slate-300 font-medium">Аванс</span><span className="text-xs text-slate-500">Фактично виплачено протягом місяця</span></div>
@@ -1852,12 +2152,16 @@
                           <span className="text-slate-300 font-bold font-mono tracking-tight"><PrivacyText text={formatCurrency(payoutSum, 'UAH')} /></span>
                         </div>
                       )}
+                      <div className="flex justify-between items-center py-3 border-b border-slate-700/50 bg-emerald-950/20 -mx-2 px-2 rounded-lg">
+                        <div className="flex flex-col"><span className="text-emerald-300 font-semibold">Фактично виплачено за листом</span><span className="text-xs text-slate-400">Аванс + виплати + прямі перерахування на банк</span></div>
+                        <span className="text-emerald-400 font-bold font-mono tracking-tight"><PrivacyText text={formatCurrency(activeMonthData.paidBySlipSum, 'UAH')} /></span>
+                      </div>
                       <div className="flex justify-between items-center pt-3 pb-4">
-                        <div className="flex flex-col"><span className="text-slate-300 font-medium">До виплати</span><span className="text-xs text-slate-500">Остаточне перерахування</span></div>
-                        <span className="text-slate-300 font-bold font-mono tracking-tight"><PrivacyText text={formatCurrency(activeMonthData.toBank, 'UAH')} /></span>
+                        <div className="flex flex-col"><span className="text-slate-300 font-medium">{activeMonthData.calculatedBankRemainder < 0 ? "Заборгованість працівника (сторно)" : "Розрахунковий залишок до виплати"}</span><span className="text-xs text-slate-500">{activeMonthData.hasExplicitBankPayout ? "Зафіксовано в листі для перерахування" : "Очікуваний залишок без прямої транзакції в листі"}</span></div>
+                        <span className={`font-bold font-mono tracking-tight ${activeMonthData.calculatedBankRemainder < 0 ? 'text-rose-400' : 'text-slate-300'}`}><PrivacyText text={formatCurrency(activeMonthData.calculatedBankRemainder, 'UAH')} /></span>
                       </div>
                       <div className="flex justify-between items-center py-4 border-t border-slate-700/50 bg-slate-800/40 -mx-4 md:-mx-5 -mb-4 md:-mb-5 px-4 md:px-5 rounded-b-xl shadow-inner">
-                        <div className="flex flex-col"><span className="text-white font-bold text-lg">Фактично отримано</span></div>
+                        <div className="flex flex-col"><span className="text-white font-bold text-lg">{activeMonthData.hasExplicitBankPayout ? "Фактично отримано" : (activeMonthData.paidBySlipSum > 0 ? "Виплати за листом" : "Розрахунковий дохід")}</span></div>
                         <span className="text-emerald-400 font-black text-xl font-mono tracking-tight"><PrivacyText text={formatCurrency(activeMonthData.netPay, 'UAH')} /></span>
                       </div>
                     </div>
@@ -1876,6 +2180,7 @@
       const [monthIdx, setMonthIdx] = useState(0); const [year, setYear] = useState(''); const [pastedText, setPastedText] = useState('');
       const [accruals, setAccruals] = useState([]); const [deductions, setDeductions] = useState([]);
       const [overwriteConfirm, setOverwriteConfirm] = useState(null);
+      const [batchImportConfirm, setBatchImportConfirm] = useState(null);
       
       const [parserPreviewData, setParserPreviewData] = useState(null);
       const [manualMapRows, setManualMapRows] = useState(null);
@@ -1886,12 +2191,13 @@
           if (e.key === 'Escape') {
             if (parserPreviewData) setParserPreviewData(null);
             if (overwriteConfirm) setOverwriteConfirm(null);
+            if (batchImportConfirm) setBatchImportConfirm(null);
             if (manualMapRows) setManualMapRows(null);
           }
         };
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-      }, [parserPreviewData, overwriteConfirm, manualMapRows]);
+      }, [parserPreviewData, overwriteConfirm, batchImportConfirm, manualMapRows]);
 
       useEffect(() => {
         const handleBeforeUnloadForm = (e) => {
@@ -1918,11 +2224,20 @@
 
       const currentAccrued = accruals.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
       const currentDeducted = deductions.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-      const currentNet = currentAccrued - currentDeducted;
+      
+      const taxesAndLevies = deductions
+        .filter(d => classifyDeduction(d.name).isTax)
+        .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+      const advancesAndPayouts = deductions
+        .filter(d => classifyDeduction(d.name).isPayout)
+        .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+
+      const currentNet = currentAccrued - taxesAndLevies;
+      const currentBalance = currentNet - advancesAndPayouts;
       
       const calcPdfo = currentAccrued * 0.18;
       const numYear = Number(year);
-      const vzRate = numYear < 2024 || (numYear === 2024 && monthIdx < 11) ? 0.015 : 0.05;
+      const vzRate = getMilitaryTaxRate(numYear, monthIdx, true);
       const calcVz = currentAccrued * vzRate;
       let actualPdfo = 0; let actualVz = 0;
       
@@ -1968,37 +2283,241 @@
         }
       };
 
-      const handleExcelUpload = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+      const cleanDataList = (list) => (list || [])
+        .filter(item => item && String(item.name || '').trim() !== '' && item.amount !== '' && item.amount !== null && item.amount !== undefined && !isNaN(Number(item.amount)) && Number.isFinite(Number(item.amount)))
+        .map(item => ({ ...item, name: String(item.name || '').trim(), amount: Number(item.amount) }));
 
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-            try {
-                const data = new Uint8Array(evt.target.result);
-                const workbook = window.XLSX.read(data, { type: 'array' });
-                
-                const firstSheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[firstSheetName];
-                
-                const rows = window.XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true, defval: null });
-                const result = ParserModule.parseGrid(rows); 
-                
-                if (result.success) {
-                    applyParsedResult(result);
-                } else {
-                    setManualMapRows(rows);
-                    setManualColMap({});
-                    showToast("Не вдалося автоматично розпізнати дані. Будь ласка, вкажіть колонки.", "warning");
-                }
-            } catch (error) {
-                console.error("Excel parse error:", error);
-                showToast("Помилка читання Excel файлу. Переконайтесь, що файл не пошкоджений.", "error");
+      const checkControlSums = (result) => {
+        const parsedAcc = (result.accruals || []).reduce((s, a) => s + (Number(a.amount) || 0), 0);
+        const parsedDed = (result.deductions || []).reduce((s, d) => s + (Number(d.amount) || 0), 0);
+        let accDiscrepancy = false;
+        let dedDiscrepancy = false;
+        if (result.totalAccruedControl !== null && result.totalAccruedControl !== undefined) {
+          if (Math.abs(parsedAcc - result.totalAccruedControl) > 0.05) accDiscrepancy = true;
+        }
+        if (result.totalDeductedControl !== null && result.totalDeductedControl !== undefined) {
+          if (Math.abs(parsedDed - result.totalDeductedControl) > 0.05) dedDiscrepancy = true;
+        }
+        return { hasDiscrepancy: accDiscrepancy || dedDiscrepancy, parsedAcc, parsedDed, accDiscrepancy, dedDiscrepancy };
+      };
+
+      const areItemListsIdentical = (listA, listB) => {
+        const a = (listA || []).map(x => ({ name: String(x?.name || '').trim().toLowerCase(), amount: Number(x?.amount || 0) }));
+        const b = (listB || []).map(x => ({ name: String(x?.name || '').trim().toLowerCase(), amount: Number(x?.amount || 0) }));
+        if (a.length !== b.length) return false;
+        const sorter = (i1, i2) => i1.name.localeCompare(i2.name) || (i1.amount - i2.amount);
+        a.sort(sorter);
+        b.sort(sorter);
+        for (let i = 0; i < a.length; i++) {
+          if (a[i].name !== b[i].name) return false;
+          if (Math.abs(a[i].amount - b[i].amount) > 0.01) return false;
+        }
+        return true;
+      };
+
+      const areSlipsIdentical = (a, b) => {
+        if (!a || !b || a.id !== b.id) return false;
+        return areItemListsIdentical(a.accruals, b.accruals) && areItemListsIdentical(a.deductions, b.deductions);
+      };
+
+      const applyBatchImport = (slipsToApply, overwriteConflicts = true) => {
+        let updated = [...dbData];
+        let appliedCount = 0;
+        let skippedCount = 0;
+
+        slipsToApply.forEach(slip => {
+          const { rawResult, control, hasDiscrepancy, ...cleanSlip } = slip;
+          const existingIdx = updated.findIndex(d => d.id === cleanSlip.id);
+          if (existingIdx !== -1) {
+            if (overwriteConflicts) {
+              updated[existingIdx] = cleanSlip;
+              appliedCount++;
+            } else {
+              skippedCount++;
             }
+          } else {
+            updated.push(cleanSlip);
+            appliedCount++;
+          }
+        });
+
+        updated.sort((a, b) => a.id.localeCompare(b.id));
+        const success = setDbData(updated);
+        if (success === false) {
+          showToast("Помилка збереження у localStorage при імпорті.", "error");
+          return;
+        }
+        if (slipsToApply.length > 0) {
+          setSelectedMonthId(slipsToApply[slipsToApply.length - 1].id);
+        }
+        if (typeof confetti === 'function') {
+          confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#3b82f6', '#10b981', '#a855f7', '#f59e0b'] });
+        }
+        showToast(`Імпортовано ${appliedCount} розрахункових листів${skippedCount > 0 ? ` (${skippedCount} пропущено)` : ''}!`, "success");
+        setBatchImportConfirm(null);
+        handleTabChange('dashboard');
+      };
+
+      const processSlipsBatch = (slips, failedFilesCount = 0, failedSheetsCount = 0, failedSheetDetails = []) => {
+        const conflicts = [];
+        const duplicates = [];
+        const newSlips = [];
+        const intraBatchCollisions = [];
+        const seenInBatch = new Map();
+
+        // Перевірка колізій періодів у межах одного пакету
+        slips.forEach(slip => {
+          if (seenInBatch.has(slip.id)) {
+            const prev = seenInBatch.get(slip.id);
+            if (!areSlipsIdentical(prev, slip)) {
+              intraBatchCollisions.push({ first: prev, second: slip });
+            }
+          } else {
+            seenInBatch.set(slip.id, slip);
+          }
+        });
+
+        const discrepancies = slips.filter(s => s.hasDiscrepancy);
+
+        slips.forEach(slip => {
+          const existing = dbData.find(d => d.id === slip.id);
+          if (existing) {
+            if (areSlipsIdentical(existing, slip)) {
+              if (!duplicates.some(d => d.id === slip.id)) duplicates.push(slip);
+            } else {
+              if (!conflicts.some(c => c.incoming.id === slip.id)) {
+                conflicts.push({ existing, incoming: slip });
+              }
+            }
+          } else {
+            if (!newSlips.some(n => n.id === slip.id)) newSlips.push(slip);
+          }
+        });
+
+        if (conflicts.length > 0 || discrepancies.length > 0 || intraBatchCollisions.length > 0 || failedSheetsCount > 0 || failedFilesCount > 0) {
+          setBatchImportConfirm({
+            allSlips: slips,
+            conflicts,
+            duplicates,
+            newSlips,
+            discrepancies,
+            intraBatchCollisions,
+            failedFilesCount,
+            failedSheetsCount,
+            failedSheetDetails
+          });
+        } else {
+          applyBatchImport(newSlips, false);
+          if (duplicates.length > 0) {
+            showToast(`${duplicates.length} ідентичних листів уже є в базі (пропущено).`, "info");
+          }
+          if (failedFilesCount > 0 || failedSheetsCount > 0) {
+            showToast(`Імпортовано успішні листи (${failedFilesCount} файлів / ${failedSheetsCount} аркушів з помилками).`, "warning");
+          }
+        }
+      };
+
+      const handleExcelUpload = async (e) => {
+        const files = Array.from(e?.target?.files || []);
+        if (files.length === 0) return;
+
+        const extractSlipsFromWorkbook = (workbook, fileName = 'файл') => {
+          const slips = [];
+          let failedSheets = 0;
+          const failedSheetDetails = [];
+          for (const sheetName of workbook.SheetNames) {
+            const worksheet = workbook.Sheets[sheetName];
+            const rows = window.XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true, defval: null });
+            const result = ParserModule.parseGrid(rows);
+            if (result.success && result.period) {
+              const mIdx = result.period.monthIdx;
+              const yr = result.period.year;
+              const monthId = `${yr}-${String(mIdx + 1).padStart(2, '0')}`;
+              const control = checkControlSums(result);
+              slips.push({
+                id: monthId,
+                month: mIdx + 1,
+                year: Number(yr),
+                monthName: MONTH_NAMES[mIdx],
+                accruals: cleanDataList(result.accruals),
+                deductions: cleanDataList(result.deductions),
+                rawResult: result,
+                hasDiscrepancy: control.hasDiscrepancy,
+                control,
+                sourceSheet: sheetName,
+                sourceFile: fileName
+              });
+            } else {
+              failedSheets++;
+              failedSheetDetails.push({ sheetName, fileName, reason: !result.success ? "Не розпізнано нарахування/утримання" : "Не розпізнано період" });
+            }
+          }
+          return { slips, failedSheets, totalSheets: workbook.SheetNames.length, failedSheetDetails };
         };
-        
-        reader.readAsArrayBuffer(file);
-        e.target.value = null;
+
+        if (files.length === 1) {
+          const file = files[0];
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+              try {
+                  const data = new Uint8Array(evt.target.result);
+                  const workbook = window.XLSX.read(data, { type: 'array' });
+                  const extraction = extractSlipsFromWorkbook(workbook, file.name);
+                  const slips = extraction.slips;
+
+                  if (slips.length === 1 && extraction.failedSheets === 0) {
+                      applyParsedResult(slips[0].rawResult);
+                      if (slips[0].hasDiscrepancy) {
+                        showToast("Увага: сума нарахувань або утримань розходиться з контрольним підсумком документа!", "warning");
+                      }
+                  } else if (slips.length > 0) {
+                      processSlipsBatch(slips, 0, extraction.failedSheets, extraction.failedSheetDetails);
+                  } else {
+                      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                      const rows = window.XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: true, defval: null });
+                      setManualMapRows(rows);
+                      setManualColMap({});
+                      showToast("Не вдалося автоматично розпізнати дані. Будь ласка, вкажіть колонки.", "warning");
+                  }
+              } catch (error) {
+                  console.error("Excel parse error:", error);
+                  showToast("Помилка читання Excel файлу. Переконайтесь, що файл не пошкоджений.", "error");
+              }
+          };
+          reader.readAsArrayBuffer(file);
+        } else {
+          const newSlips = [];
+          let failedFilesCount = 0;
+          let failedSheetsCount = 0;
+          let allFailedSheetDetails = [];
+          for (const file of files) {
+            try {
+              const buffer = await file.arrayBuffer();
+              const data = new Uint8Array(buffer);
+              const workbook = window.XLSX.read(data, { type: 'array' });
+              const extraction = extractSlipsFromWorkbook(workbook, file.name);
+              if (extraction.slips.length === 0) {
+                failedFilesCount++;
+              } else {
+                newSlips.push(...extraction.slips);
+              }
+              if (extraction.failedSheets > 0) {
+                failedSheetsCount += extraction.failedSheets;
+                allFailedSheetDetails.push(...extraction.failedSheetDetails);
+              }
+            } catch (fileErr) {
+              console.error(`Error processing file ${file.name}:`, fileErr);
+              failedFilesCount++;
+            }
+          }
+          if (newSlips.length > 0) {
+            newSlips.sort((a, b) => a.id.localeCompare(b.id));
+            processSlipsBatch(newSlips, failedFilesCount, failedSheetsCount, allFailedSheetDetails);
+          } else {
+            showToast(`Жоден файл із вибраних (${files.length}) не вдалося розпізнати автоматично. (${failedFilesCount} з помилками)`, "error");
+          }
+        }
+        if (e && e.target) e.target.value = null;
       };
       
       const applyManualMapping = () => {
@@ -2032,7 +2551,7 @@
             if (accNameIdx && accAmtIdx) {
                 const name = row[accNameIdx];
                 const amount = ParserModule.parseNum(row[accAmtIdx]);
-                if (name && amount > 0 && typeof name === 'string' && name.trim() && !ParserModule.isPeriodCode(row[accAmtIdx])) {
+                if (name && amount !== 0 && typeof name === 'string' && name.trim() && !ParserModule.isDateString(row[accAmtIdx])) {
                     accruals.push({ id: generateId(), name: ParserModule.sanitizeName(name), amount, days: 0, hours: '0:0', percent: '' });
                 }
             }
@@ -2040,7 +2559,7 @@
             if (dedNameIdx && dedAmtIdx) {
                 const name = row[dedNameIdx];
                 const amount = ParserModule.parseNum(row[dedAmtIdx]);
-                if (name && amount > 0 && typeof name === 'string' && name.trim() && !ParserModule.isPeriodCode(row[dedAmtIdx])) {
+                if (name && amount !== 0 && typeof name === 'string' && name.trim() && !ParserModule.isDateString(row[dedAmtIdx])) {
                     deductions.push({ id: generateId(), name: ParserModule.sanitizeName(name), amount });
                 }
             }
@@ -2055,9 +2574,9 @@
       };
 
       const confirmParserPreview = () => {
-        if (parserPreviewData.accruals.length > 0) setAccruals(parserPreviewData.accruals); 
-        if (parserPreviewData.deductions.length > 0) setDeductions(parserPreviewData.deductions);
-        if (parserPreviewData.period) { 
+        setAccruals(Array.isArray(parserPreviewData?.accruals) ? parserPreviewData.accruals : []); 
+        setDeductions(Array.isArray(parserPreviewData?.deductions) ? parserPreviewData.deductions : []);
+        if (parserPreviewData?.period) { 
           setMonthIdx(parserPreviewData.period.monthIdx); 
           setYear(parserPreviewData.period.year.toString()); 
         }
@@ -2066,14 +2585,11 @@
         showToast("Дані успішно перенесено у форму!", "success");
       };
 
-      const cleanDataList = (list) => list.filter(item => item.name.trim() !== '' && item.amount !== '' && !isNaN(Number(item.amount))).map(item => ({ ...item, amount: Number(item.amount) }));
-
       const handleFormSubmit = (e) => {
         e.preventDefault();
         
-        if (currentNet < 0) {
-           showToast("Помилка: залишок не може бути від'ємним. Перевірте суми утримань.", "error");
-           return;
+        if (currentBalance < -1 || currentNet < 0) {
+           showToast("Увага: залишок є від'ємним (борг за працівником / сторно).", "warning");
         }
 
         const monthId = `${year}-${String(monthIdx + 1).padStart(2, '0')}`; 
@@ -2089,8 +2605,15 @@
       const savePayslip = (newSlip) => {
         let updatedData = dbData.filter(d => d.id !== newSlip.id);
         if (editingPayslip && editingPayslip.id !== newSlip.id) updatedData = updatedData.filter(d => d.id !== editingPayslip.id);
-        setDbData([...updatedData, newSlip]); setSelectedMonthId(newSlip.id);
-        confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#3b82f6', '#10b981', '#a855f7', '#f59e0b'] });
+        const success = setDbData([...updatedData, newSlip]);
+        if (success === false) {
+          showToast("Помилка збереження у localStorage. Можливо, перевищено квоту пам'яті браузера.", "error");
+          return;
+        }
+        setSelectedMonthId(newSlip.id);
+        if (typeof confetti === 'function') {
+          confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 }, colors: ['#3b82f6', '#10b981', '#a855f7', '#f59e0b'] });
+        }
         showToast(editingPayslip ? "Зміни успішно збережено!" : "Збережено локально. Не забудьте експортувати базу!", "success");
         setIsFormDirty(false); setEditingPayslip(null); handleTabChange('payslips', true); setOverwriteConfirm(null);
       };
@@ -2102,11 +2625,11 @@
           
           <AnimatePresence>
             {manualMapRows && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="dialog" aria-modal="true" className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
                 <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="bg-white/95 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-[0_0_40px_rgba(0,0,0,0.2)] dark:shadow-[0_0_40px_rgba(0,0,0,0.5)] max-w-5xl w-full p-6 border border-white/20 dark:border-slate-700/50 max-h-[90vh] flex flex-col">
                   <div className="flex items-center justify-between mb-2 shrink-0">
                     <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2"><IconAlert /> Розпізнавання не вдалося</h3>
-                    <button onClick={() => setManualMapRows(null)} className="p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors"><IconX /></button>
+                    <button onClick={() => setManualMapRows(null)} className="p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors" aria-label="Закрити вікно налаштування колонок"><IconX /></button>
                   </div>
                   <p className="text-slate-500 dark:text-slate-400 text-sm mb-4 shrink-0">Вкажіть, в яких колонках знаходяться потрібні дані. Оберіть тип для відповідного стовпця.</p>
 
@@ -2156,11 +2679,11 @@
 
           <AnimatePresence>
             {parserPreviewData && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
                 <motion.div initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 20 }} className="bg-white/95 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-[0_0_40px_rgba(0,0,0,0.2)] dark:shadow-[0_0_40px_rgba(0,0,0,0.5)] max-w-2xl w-full p-6 border border-white/20 dark:border-slate-700/50 max-h-[90vh] flex flex-col">
                   <div className="flex items-center justify-between mb-4 shrink-0">
                     <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2"><IconCheck /> Попередній перегляд імпорту</h3>
-                    <button onClick={() => setParserPreviewData(null)} className="p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors"><IconX /></button>
+                    <button onClick={() => setParserPreviewData(null)} className="p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors" aria-label="Закрити попередній перегляд"><IconX /></button>
                   </div>
                   
                   <div className="overflow-y-auto pr-2 no-scrollbar flex-1">
@@ -2230,13 +2753,76 @@
 
           <AnimatePresence>
             {overwriteConfirm && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
                 <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white/95 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 border border-white/20 dark:border-slate-700/50">
                   <div className="flex items-center gap-3 text-amber-600 dark:text-amber-500 mb-4"><div className="bg-amber-100 dark:bg-amber-900/30 p-2 rounded-full"><IconAlert /></div><h3 className="text-xl font-bold">Оновлення даних</h3></div>
                   <p className="text-slate-600 dark:text-slate-300 mb-6">Розрахунковий лист за <b>{overwriteConfirm.monthName} {overwriteConfirm.year}</b> вже існує. Бажаєте перезаписати старі дані?</p>
                   <div className="flex justify-end gap-3">
                     <button type="button" onClick={() => setOverwriteConfirm(null)} className="px-4 py-2 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">Скасувати</button>
                     <button type="button" onClick={() => savePayslip(overwriteConfirm)} className="px-4 py-2 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 transition shadow-sm">Перезаписати</button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {batchImportConfirm && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
+                <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white/95 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-2xl max-w-lg w-full p-6 border border-white/20 dark:border-slate-700/50 max-h-[90vh] overflow-y-auto">
+                  <div className="flex items-center gap-3 text-amber-600 dark:text-amber-500 mb-4">
+                    <div className="bg-amber-100 dark:bg-amber-900/30 p-2 rounded-full"><IconAlert /></div>
+                    <h3 className="text-xl font-bold">Аналіз пакетного імпорту</h3>
+                  </div>
+
+                  <p className="text-slate-600 dark:text-slate-300 text-sm mb-4">
+                    Знайдено <b>{batchImportConfirm.allSlips.length}</b> розрахункових листів. Будь ласка, перевірте результати аналізу:
+                  </p>
+
+                  <div className="space-y-3 mb-6 text-sm">
+                    {batchImportConfirm.newSlips.length > 0 && (
+                      <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl text-emerald-800 dark:text-emerald-200">
+                        <span className="font-bold">Нові періоди ({batchImportConfirm.newSlips.length}):</span> {batchImportConfirm.newSlips.map(s => s.id).join(', ')}
+                      </div>
+                    )}
+
+                    {batchImportConfirm.conflicts.length > 0 && (
+                      <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-amber-800 dark:text-amber-200">
+                        <span className="font-bold">Конфлікти даних ({batchImportConfirm.conflicts.length}):</span> наступні місяці вже є в базі з іншими сумами: {batchImportConfirm.conflicts.map(c => c.incoming.id).join(', ')}
+                      </div>
+                    )}
+
+                    {batchImportConfirm.discrepancies.length > 0 && (
+                      <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl text-rose-800 dark:text-rose-200">
+                        <span className="font-bold">Розбіжності сум ({batchImportConfirm.discrepancies.length}):</span> суми розходяться з контрольними підсумками документа для: {batchImportConfirm.discrepancies.map(d => d.id).join(', ')}
+                      </div>
+                    )}
+
+                    {batchImportConfirm.duplicates.length > 0 && (
+                      <div className="p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-300">
+                        <span className="font-bold">Ідентичні повтори ({batchImportConfirm.duplicates.length}):</span> будуть збережені без змін.
+                      </div>
+                    )}
+
+                    {batchImportConfirm.failedFilesCount > 0 && (
+                      <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl text-rose-800 dark:text-rose-200">
+                        <span className="font-bold">Помилки файлів:</span> {batchImportConfirm.failedFilesCount} файлів не вдалося розпізнати.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <button type="button" onClick={() => setBatchImportConfirm(null)} className="px-4 py-2.5 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">
+                      Скасувати
+                    </button>
+                    {batchImportConfirm.conflicts.length > 0 && (
+                      <button type="button" onClick={() => applyBatchImport(batchImportConfirm.newSlips, false)} className="px-4 py-2.5 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 transition">
+                        Додати тільки нові
+                      </button>
+                    )}
+                    <button type="button" onClick={() => applyBatchImport(batchImportConfirm.allSlips, true)} className="px-5 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition shadow-sm">
+                      {batchImportConfirm.conflicts.length > 0 ? "Оновити всі (перезаписати)" : "Застосувати імпорт"}
+                    </button>
                   </div>
                 </motion.div>
               </motion.div>
@@ -2250,7 +2836,7 @@
                 
                 {!hasSeenImportHint && pastedText.length === 0 && (
                   <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="absolute -top-14 sm:-top-12 left-4 z-10 bg-indigo-900/80 dark:bg-indigo-900/90 backdrop-blur-md text-white p-2.5 sm:p-3 rounded-xl border border-white/20 shadow-2xl flex items-center gap-3">
-                    <span className="text-xl animate-bounce">💡</span>
+                    <span className="text-xl animate-bounce text-amber-400 shrink-0"><IconLightbulb /></span>
                     <div className="text-sm">
                       <p className="font-bold">Як це працює?</p>
                       <p className="opacity-90 text-xs hidden sm:block">Скопіюйте текст із PDF чи завантажте оригінальний файл .xls/.xlsx</p>
@@ -2261,7 +2847,7 @@
                 )}
 
                 <div className="flex flex-col md:flex-row gap-4">
-                  <textarea value={pastedText} onChange={(e) => setPastedText(e.target.value)} placeholder="Вставте сюди скопійований текст..." className="flex-1 h-24 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-700 text-slate-800 dark:text-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-colors relative z-0" />
+                  <textarea value={pastedText} onChange={(e) => setPastedText(e.target.value)} placeholder="Вставте сюди скопійований текст розрахункового листа (наприклад, з PDF або таблиці)..." className="flex-1 h-36 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-700 text-slate-800 dark:text-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-colors relative z-0" />
                   
                   <div className="flex flex-col gap-2 w-full md:w-48 shrink-0">
                     <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={handleParseAttempt} disabled={!pastedText.trim()} className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center justify-center gap-2">
@@ -2274,9 +2860,10 @@
                         <hr className="flex-1 border-blue-200 dark:border-blue-800/50" />
                     </div>
 
-                    <label className="w-full py-2.5 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition shadow-sm flex items-center justify-center gap-2 cursor-pointer text-sm border border-emerald-500">
-                        <IconExcel /> Завантажити .xls
-                        <input type="file" accept=".xls,.xlsx,.csv" className="hidden" onChange={handleExcelUpload} />
+                    <label className="w-full py-2.5 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition shadow-sm flex flex-col items-center justify-center gap-0.5 cursor-pointer text-sm border border-emerald-500">
+                        <span className="flex items-center gap-2"><IconExcel /> Завантажити .xls</span>
+                        <span className="text-[10px] font-normal opacity-80">можна вибрати кілька файлів</span>
+                        <input type="file" accept=".xls,.xlsx,.csv" multiple className="hidden" onChange={handleExcelUpload} />
                     </label>
                   </div>
                 </div>
@@ -2320,7 +2907,7 @@
                         <input type="text" placeholder="Год" value={item.hours} onChange={e => { const newArr = [...accruals]; newArr[idx].hours = e.target.value; setAccruals(newArr); markDirty(); }} className="w-full md:w-20 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 font-mono rounded-lg p-2.5 text-sm transition-colors" />
                         <input type="number" step="0.01" inputMode="decimal" placeholder="Сума ₴" value={item.amount} onChange={e => { const newArr = [...accruals]; newArr[idx].amount = e.target.value; setAccruals(newArr); markDirty(); }} className="w-full md:w-28 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-emerald-700 dark:text-emerald-400 font-mono rounded-lg p-2.5 text-sm font-bold transition-colors" required />
                       </div>
-                      <button type="button" onClick={() => removeAccrual(item.id)} className="w-full md:w-auto p-2.5 flex justify-center text-rose-500 bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/20 dark:hover:bg-rose-900/40 rounded-lg transition mt-2 md:mt-0"><IconTrash /></button>
+                      <button type="button" onClick={() => removeAccrual(item.id)} className="w-full md:w-auto p-2.5 flex justify-center text-rose-500 bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/20 dark:hover:bg-rose-900/40 rounded-lg transition mt-2 md:mt-0" aria-label="Видалити нарахування"><IconTrash /></button>
                     </motion.div>
                   ))}
                 </AnimatePresence>
@@ -2350,25 +2937,31 @@
                     <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, height: 0, overflow: 'hidden' }} key={item.id} className="flex flex-col md:flex-row gap-2 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50 transition-colors">
                       <input type="text" placeholder="Вид утримання" value={item.name} onChange={e => { const newArr = [...deductions]; newArr[idx].name = e.target.value; setDeductions(newArr); markDirty(); }} className="w-full md:flex-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-lg p-2.5 text-sm transition-colors" required />
                       <input type="number" step="0.01" inputMode="decimal" placeholder="Сума ₴" value={item.amount} onChange={e => { const newArr = [...deductions]; newArr[idx].amount = e.target.value; setDeductions(newArr); markDirty(); }} className={`w-full md:w-32 bg-white dark:bg-slate-800 border rounded-lg p-2.5 text-sm font-bold font-mono transition-colors ${showTaxWarning && isTax ? 'border-amber-300 dark:border-amber-600 text-amber-700 dark:text-amber-400' : 'border-slate-200 dark:border-slate-700 text-rose-700 dark:text-rose-400'}`} required />
-                      <button type="button" onClick={() => removeDeduction(item.id)} className="w-full md:w-auto p-2.5 flex justify-center text-rose-500 bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/20 dark:hover:bg-rose-900/40 rounded-lg transition mt-2 md:mt-0"><IconTrash /></button>
+                      <button type="button" onClick={() => removeDeduction(item.id)} className="w-full md:w-auto p-2.5 flex justify-center text-rose-500 bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/20 dark:hover:bg-rose-900/40 rounded-lg transition mt-2 md:mt-0" aria-label="Видалити утримання"><IconTrash /></button>
                     </motion.div>
                   )})}
                 </AnimatePresence>
               </div>
             </div>
 
-            <div className={`sticky bottom-4 z-40 bg-slate-800 dark:bg-slate-900 text-white p-4 rounded-2xl shadow-xl border mt-6 md:hidden ${currentNet < 0 ? 'border-rose-500 ring-2 ring-rose-500/50' : 'border-slate-700'}`}>
-              <div className="flex justify-between items-center text-sm mb-1">
-                <span className="text-slate-400">Нараховано:</span>
-                <span className="text-emerald-400 font-bold font-mono tracking-tight">{formatCurrency(currentAccrued, 'UAH')}</span>
-              </div>
-              <div className="flex justify-between items-center text-sm mb-2 border-b border-slate-700 pb-2">
-                <span className="text-slate-400">Утримано:</span>
-                <span className="text-rose-400 font-bold font-mono tracking-tight">-{formatCurrency(currentDeducted, 'UAH')}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="font-bold text-slate-200">Попередньо до виплати:</span>
-                <span className={`text-lg font-black font-mono tracking-tight ${currentNet < 0 ? 'text-rose-400' : 'text-white'}`}>{formatCurrency(currentNet, 'UAH')}</span>
+            <div className={`bg-slate-800 dark:bg-slate-900 text-white p-4 rounded-2xl shadow-xl border mt-6 ${currentBalance < -1 || currentNet < 0 ? 'border-rose-500 ring-2 ring-rose-500/50' : 'border-slate-700'}`}>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 items-center">
+                <div className="flex flex-col">
+                  <span className="text-xs text-slate-400">Нараховано:</span>
+                  <span className="text-emerald-400 font-bold font-mono tracking-tight text-sm md:text-base">{formatCurrency(currentAccrued, 'UAH')}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs text-slate-400">Податки та збори:</span>
+                  <span className="text-rose-400 font-bold font-mono tracking-tight text-sm md:text-base">-{formatCurrency(taxesAndLevies, 'UAH')}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs text-slate-300 font-semibold">Чистий заробіток:</span>
+                  <span className={`font-bold font-mono tracking-tight text-sm md:text-base ${currentNet < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>{formatCurrency(currentNet, 'UAH')}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-slate-200">Залишок до виплати:</span>
+                  <span className={`text-base md:text-lg font-black font-mono tracking-tight ${currentBalance < -1 ? 'text-rose-400' : 'text-white'}`}>{formatCurrency(currentBalance, 'UAH')}</span>
+                </div>
               </div>
             </div>
 
@@ -2383,287 +2976,156 @@
       );
     };
 
-    const VacationCalculatorView = () => {
-      const { summaryData, handleTabChange } = useSalaryContext();
-      const [vacationDays, setVacationDays] = useState(14);
-      const [selectedMonthNum, setSelectedMonthNum] = useState(null);
-      
-      const [expectedBonusPct, setExpectedBonusPct] = useState(0);
-      const [useSeasonality, setUseSeasonality] = useState(false);
-      const [historicalBonusMap, setHistoricalBonusMap] = useState({});
-
-      useEffect(() => {
-        if (!summaryData || summaryData.length === 0) return;
-        const sortedData = [...summaryData].sort((a, b) => b.id.localeCompare(a.id));
-        const last12 = sortedData.slice(0, 12);
-        
-        let totalOklad = 0;
-        let totalBonus = 0;
-        const hMap = {};
-        
-        last12.forEach(m => {
-          const oklad = m.accruals.filter(a => a.name.toLowerCase().includes('оклад') || a.name.toLowerCase().includes('надбав')).reduce((sum, a) => sum + Number(a.amount), 0);
-          const bonus = m.totalBonuses + m.otherBonuses;
-          totalOklad += oklad;
-          totalBonus += bonus;
-          
-          if (oklad > 0) {
-            hMap[m.month] = (bonus / oklad) * 100;
-          }
-        });
-        
-        const avgBonus = totalOklad > 0 ? Math.round((totalBonus / totalOklad) * 100) : 0;
-        setExpectedBonusPct(avgBonus);
-        
-        const finalMap = {};
-        for(let i=1; i<=12; i++) {
-           finalMap[i] = hMap[i] !== undefined ? Math.round(hMap[i]) : avgBonus;
-        }
-        setHistoricalBonusMap(finalMap);
-      }, [summaryData]);
-
-      if (!summaryData || summaryData.length === 0) {
-        return (
-          <div className="flex flex-col items-center justify-center h-64 text-slate-400 dark:text-slate-500">
-            <IconSuitcase />
-            <p className="mt-4">Немає даних для розрахунку. Додайте розрахункові листи.</p>
-          </div>
-        );
+    const validateImportedPayslips = (data) => {
+      if (!Array.isArray(data)) {
+        return { valid: false, error: "Очікується масив розрахункових листів." };
       }
-
-      const sortedData = [...summaryData].sort((a, b) => b.id.localeCompare(a.id));
-      const last12 = sortedData.slice(0, 12);
-      const totalAccrued12 = last12.reduce((sum, month) => sum + month.totalAccrued, 0);
-
-      const totalCalendarDays = last12.reduce((sum, m) => {
-        const daysInMonth = new Date(m.year, m.month, 0).getDate();
-        return sum + daysInMonth;
-      }, 0) || 365;
-      const avgDailyVacation = totalCalendarDays > 0 ? (totalAccrued12 / totalCalendarDays) : 0;
-
-      const latestMonth = sortedData[0];
-      const okladAccruals = latestMonth.accruals.filter(a => a.name.toLowerCase().includes('оклад') || a.name.toLowerCase().includes('надбав'));
-      const currentBase = okladAccruals.reduce((sum, a) => sum + Number(a.amount), 0) || latestMonth.totalAccrued;
-
-      const getWorkDaysInMonth = (year, monthNum) => {
-        const daysCount = new Date(year, monthNum, 0).getDate();
-        let workDays = 0;
-        for (let day = 1; day <= daysCount; day++) {
-          const dayOfWeek = new Date(year, monthNum - 1, day).getDay();
-          if (dayOfWeek !== 0 && dayOfWeek !== 6) workDays++;
+      if (data.length === 0) {
+        return { valid: true };
+      }
+      const seenPeriods = new Set();
+      for (let i = 0; i < data.length; i++) {
+        const item = data[i];
+        if (!item || typeof item !== 'object') {
+          return { valid: false, error: `Елемент #${i + 1} не є коректним об'єктом.` };
         }
-        return workDays;
-      };
+        
+        const m = Number(item.month);
+        const y = Number(item.year);
+        if (!Number.isInteger(m) || m < 1 || m > 12) {
+          return { valid: false, error: `Елемент #${i + 1}: некоректний місяць (${item.month}). Очікується число від 1 до 12.` };
+        }
+        if (!Number.isInteger(y) || y < 1900 || y > 2100) {
+          return { valid: false, error: `Елемент #${i + 1}: некоректний рік (${item.year}). Очікується 4-значний рік.` };
+        }
 
-      const currentYear = new Date().getFullYear();
+        const expectedId = `${y}-${String(m).padStart(2, '0')}`;
+        if (item.id !== undefined && item.id !== null) {
+          if (typeof item.id !== 'string' || item.id.trim() === '') {
+            return { valid: false, error: `Елемент #${i + 1}: некоректний id (${item.id}). Очікується текстовий ідентифікатор періоду.` };
+          }
+          let isLegacyDotMatch = false;
+          if (item.id.includes('.')) {
+            const parts = item.id.split('.');
+            if ((parts[0] == y && parts[1] == m) || (parts[1] == y && parts[0] == m)) {
+              isLegacyDotMatch = true;
+            }
+          }
+          if (item.id !== expectedId && !isLegacyDotMatch) {
+            return { valid: false, error: `Елемент #${i + 1}: невідповідність id (${item.id}) та періоду (${expectedId}).` };
+          }
+        }
 
-      const monthAnalysis = Array.from({length: 12}, (_, i) => i + 1).map(mNum => {
-        const daysCount = new Date(currentYear, mNum, 0).getDate();
-        const workDays = getWorkDaysInMonth(currentYear, mNum);
-        
-        const missedWorkDays = Math.round(vacationDays * (workDays / daysCount));
-        
-        const baseDailyWage = workDays > 0 ? currentBase / workDays : 0;
-        const appliedBonusPct = useSeasonality ? (historicalBonusMap[mNum] || 0) : expectedBonusPct;
-        
-        const vacationPay = avgDailyVacation * vacationDays;
-        const lostBasePay = baseDailyWage * missedWorkDays;
-        const lostBonusPay = (baseDailyWage * (appliedBonusPct / 100)) * missedWorkDays;
-        
-        const diffTotal = vacationPay - (lostBasePay + lostBonusPay);
-        
-        return {
-          month: mNum,
-          monthName: MONTH_NAMES[mNum - 1],
-          workDays,
-          missedWorkDays,
-          baseDailyWage,
-          appliedBonusPct,
-          diffTotal,
-          vacationPay,
-          lostBasePay,
-          lostBonusPay,
-          isProfitable: diffTotal > 0
+        if (seenPeriods.has(expectedId)) {
+          return { valid: false, error: `Виявлено дублікат періоду ${expectedId} (елемент #${i + 1}).` };
+        }
+        seenPeriods.add(expectedId);
+
+        if (!Array.isArray(item.accruals) || !Array.isArray(item.deductions)) {
+          return { valid: false, error: `Елемент #${i + 1} (${item.id || expectedId}) не містить обов'язкових масивів нарахувань або утримань.` };
+        }
+
+        const isValidAmount = (val) => {
+          if (val === null || val === undefined || typeof val === 'boolean' || val === '') return false;
+          if (typeof val === 'string' && val.trim() === '') return false;
+          const num = Number(val);
+          return Number.isFinite(num);
         };
-      }).sort((a, b) => b.diffTotal - a.diffTotal);
 
-      const activeAnalysis = (selectedMonthNum !== null ? monthAnalysis.find(m => m.month === selectedMonthNum) : null) || monthAnalysis[0];
-
-      return (
-        <motion.div variants={pageVariants} initial="initial" animate="animate" exit="exit" className="max-w-5xl mx-auto space-y-6 pb-20">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-xl flex items-center justify-center shadow-sm">
-                <IconSuitcase />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Калькулятор вигідності відпустки</h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">З урахуванням премій та Порядку № 100</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-2xl p-5 shadow-sm text-sm text-amber-900 dark:text-amber-200">
-            <h4 className="font-bold flex items-center gap-2 mb-2">
-              <span className="text-lg">💡</span> Як премії впливають на вигідність?
-            </h4>
-            <ul className="list-disc pl-5 space-y-1">
-              <li>Премії за останні 12 місяців <strong>підвищують</strong> ваші відпускні (вони вже включені в базу).</li>
-              <li>Але за дні відпустки премія поточного місяця <strong>не нараховується</strong> (ви втрачаєте її разом з окладом).</li>
-              <li><strong>Секрет:</strong> Найвигідніше йти у відпустку в місяці з помірною премією відразу <em>після</em> того, як ви отримали велику премію (вона підніме відпускні, а втратите ви мало).</li>
-            </ul>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-5 space-y-6">
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-                <h3 className="text-lg font-bold mb-4 text-slate-800 dark:text-slate-200">Параметри відпустки</h3>
-                
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">Кількість днів</label>
-                  <div className="flex gap-2 mb-3">
-                    {[7, 10, 14, 24].map(d => (
-                      <button key={d} onClick={() => setVacationDays(d)} className={`flex-1 px-3 py-2 rounded-lg font-medium transition-colors ${vacationDays === d ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>{d}</button>
-                    ))}
-                  </div>
-                  <input type="range" min="1" max="30" value={vacationDays} onChange={(e) => setVacationDays(Number(e.target.value))} className="w-full accent-blue-600 mb-1" />
-                  <div className="text-right text-sm font-bold text-blue-600 dark:text-blue-400">{vacationDays} днів</div>
-                </div>
-
-                <div className="mb-6 pt-4 border-t border-slate-100 dark:border-slate-700">
-                  <div className="flex justify-between items-center mb-2">
-                    <label className="block text-sm font-medium text-slate-600 dark:text-slate-400">Очікувана премія поточного періоду</label>
-                    <span className="text-sm font-bold text-blue-600 dark:text-blue-400">{expectedBonusPct}%</span>
-                  </div>
-                  <div className="flex gap-1.5 mb-3 flex-wrap">
-                    {[0, 20, 50, 75, 100, 150].map(p => (
-                      <button key={p} onClick={() => setExpectedBonusPct(p)} className={`px-2.5 py-1 text-xs rounded-md font-medium transition-colors ${expectedBonusPct === p ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>{p}%</button>
-                    ))}
-                  </div>
-                  <input type="range" min="0" max="200" step="5" value={expectedBonusPct} onChange={(e) => setExpectedBonusPct(Number(e.target.value))} className="w-full accent-blue-600 mb-4" disabled={useSeasonality} />
-                  
-                  <label className="flex items-center gap-3 cursor-pointer p-3 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                    <div className="relative inline-flex items-center">
-                      <input type="checkbox" className="sr-only peer" checked={useSeasonality} onChange={() => setUseSeasonality(!useSeasonality)} />
-                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600"></div>
-                    </div>
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Враховувати сезонність премій (історичний % по місяцях)</span>
-                  </label>
-                </div>
-
-                <div className="space-y-3 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700/50">
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-500">Ваш середньоденний відпускний:</span>
-                    <span className="font-bold font-mono text-slate-700 dark:text-slate-300">{formatCurrency(avgDailyVacation)}</span>
-                  </div>
-                  <div className="text-xs text-slate-400">
-                    База: {formatCurrency(totalAccrued12)} / {totalCalendarDays} календ. дн.
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="lg:col-span-7 flex flex-col gap-6">
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col max-h-[400px]">
-                <h3 className="text-lg font-bold mb-4 text-slate-800 dark:text-slate-200 flex justify-between">
-                  <span>Рейтинг місяців</span>
-                  <span className="text-sm font-normal text-slate-500">({vacationDays} дн.)</span>
-                </h3>
-                <div className="flex-1 overflow-y-auto pr-2 space-y-2 no-scrollbar">
-                  {monthAnalysis.map((ma, idx) => (
-                    <button key={ma.month} onClick={() => setSelectedMonthNum(ma.month)} className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${activeAnalysis.month === ma.month ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-sm' : 'border-slate-100 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30'}`}>
-                      <div className="flex items-center gap-3">
-                        <span className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${idx === 0 ? 'bg-emerald-100 text-emerald-700' : idx === 11 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}`}>
-                          {idx + 1}
-                        </span>
-                        <span className="font-medium text-slate-800 dark:text-slate-200 w-20">{ma.monthName}</span>
-                        {useSeasonality && <span className="text-xs text-slate-400 w-16 text-right whitespace-nowrap">п: {ma.appliedBonusPct}%</span>}
-                      </div>
-                      <div className="flex flex-col items-end">
-                        <span className={`text-sm font-bold font-mono ${ma.isProfitable ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                          {ma.isProfitable ? '+' : ''}{formatCurrency(ma.diffTotal)}
-                        </span>
-                        <span className="text-[10px] text-slate-400">{ma.workDays} роб. дн.</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <AnimatePresence mode="wait">
-                <motion.div key={activeAnalysis.month} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className={`rounded-2xl p-6 shadow-sm border ${activeAnalysis.isProfitable ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800/30' : 'bg-rose-50 dark:bg-rose-900/10 border-rose-200 dark:border-rose-800/30'}`}>
-                  <div className="flex items-start gap-4 mb-5">
-                    <div className="text-4xl">{activeAnalysis.isProfitable ? '🔥' : '⚠️'}</div>
-                    <div className="flex-1">
-                      <h3 className="text-xl font-bold mb-1 text-slate-800 dark:text-slate-100">
-                        {activeAnalysis.monthName}: {activeAnalysis.isProfitable ? 'Брати відпустку ВИГІДНО!' : 'Брати відпустку НЕВИГІДНО!'}
-                      </h3>
-                      <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
-                        {activeAnalysis.isProfitable 
-                          ? `Оскільки відпускні вищі за вашу оплату за ${activeAnalysis.missedWorkDays} робочих днів (з урахуванням премії), ви виграєте фінансово.`
-                          : `Оплата за ${activeAnalysis.missedWorkDays} робочих днів (з урахуванням премії) вища за відпускні. Йдучи у відпустку на ${vacationDays} днів, ви втрачаєте гроші.`}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm border border-slate-100 dark:border-slate-700/50">
-                    <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 border-b border-slate-100 dark:border-slate-700 pb-2">Фінансова розбивка (за {vacationDays} дн.)</h4>
-                    
-                    <div className="space-y-2 mb-3">
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-slate-600 dark:text-slate-400 flex items-center gap-2">🌴 Нараховані відпускні</span>
-                        <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">+{formatCurrency(activeAnalysis.vacationPay)}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-slate-600 dark:text-slate-400 flex items-center gap-2">💼 Недоотриманий оклад</span>
-                        <span className="font-bold text-rose-600 dark:text-rose-400 font-mono">-{formatCurrency(activeAnalysis.lostBasePay)}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-slate-600 dark:text-slate-400 flex items-center gap-2">🎁 Недоотримана премія ({activeAnalysis.appliedBonusPct}%)</span>
-                        <span className="font-bold text-rose-600 dark:text-rose-400 font-mono">-{formatCurrency(activeAnalysis.lostBonusPay)}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="flex justify-between items-center pt-3 border-t border-slate-100 dark:border-slate-700">
-                      <span className="font-bold text-slate-800 dark:text-slate-200">⚖️ Чистий результат</span>
-                      <span className={`font-bold font-mono text-lg ${activeAnalysis.isProfitable ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-                        {activeAnalysis.isProfitable ? '+' : ''}{formatCurrency(activeAnalysis.diffTotal)}
-                      </span>
-                    </div>
-                  </div>
-                </motion.div>
-              </AnimatePresence>
-            </div>
-          </div>
-        </motion.div>
-      );
+        for (const a of item.accruals) {
+          if (!a || typeof a !== 'object' || !isValidAmount(a.amount)) {
+            return { valid: false, error: `Елемент #${i + 1}: некоректний або нескінченний запис суми у нарахуваннях.` };
+          }
+        }
+        for (const d of item.deductions) {
+          if (!d || typeof d !== 'object' || !isValidAmount(d.amount)) {
+            return { valid: false, error: `Елемент #${i + 1}: некоректний або нескінченний запис суми в утриманнях.` };
+          }
+        }
+      }
+      return { valid: true };
     };
 
     const Layout = () => {
       const { theme, toggleTheme, isPrivateMode, togglePrivateMode, activeTab, handleTabChange, pendingTab, confirmTabChange, cancelTabChange, dbData, setDbData, generateAndDownloadJSONFile, showToast, hasUnexportedChanges, clearAllData, isMobileMenuOpen, setIsMobileMenuOpen } = useSalaryContext();
-      const [isRestoring, setIsRestoring] = useState(false); const [showClearConfirm, setShowClearConfirm] = useState(false); const [isDragging, setIsDragging] = useState(false); const backupInputRef = useRef(null);
+      const [isRestoring, setIsRestoring] = useState(false); const [showClearConfirm, setShowClearConfirm] = useState(false); const [isDragging, setIsDragging] = useState(false); const [importConfirmData, setImportConfirmData] = useState(null); const backupInputRef = useRef(null);
 
       useEffect(() => {
         const handleKeyDown = (e) => {
-          if (e.key === 'Escape' && showClearConfirm) setShowClearConfirm(false);
+          if (e.key === 'Escape') {
+            if (pendingTab) cancelTabChange();
+            if (showClearConfirm) setShowClearConfirm(false);
+            if (importConfirmData) setImportConfirmData(null);
+          }
         };
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-      }, [showClearConfirm]);
+      }, [pendingTab, cancelTabChange, showClearConfirm, importConfirmData]);
 
       const processImportedFile = (file) => {
         setIsRestoring(true); const reader = new FileReader();
         reader.onload = (event) => {
           try {
             const importedData = JSON.parse(event.target.result);
-            if (Array.isArray(importedData)) {
-              const migratedData = importedData.map(item => {
-                 if (item.id && item.id.includes('.')) { const mIdx = MONTH_NAMES.indexOf(item.monthName); const yearNum = item.year.toString().length === 2 ? `20${item.year}` : item.year; return { ...item, id: `${yearNum}-${String(mIdx + 1).padStart(2, '0')}`, month: mIdx + 1, year: Number(yearNum) }; }
-                 return item;
-              });
-              setDbData(migratedData); showToast("Дані успішно імпортовано!", "success"); handleTabChange('dashboard');
-            } else { showToast("Очікується масив даних.", "error"); }
-          } catch (err) { showToast("Помилка. Це не валідний .json", "error"); } finally { setIsRestoring(false); if (backupInputRef.current) backupInputRef.current.value = ''; }
+            const validation = validateImportedPayslips(importedData);
+            if (!validation.valid) {
+              showToast(validation.error, "error");
+              return;
+            }
+            const migratedData = importedData.map(item => {
+               let id = item.id;
+               let month = item.month;
+               let year = Number(item.year);
+               let monthName = item.monthName;
+               let safeM = Number(item.month);
+               let safeY = Number(item.year);
+               if (id && typeof id === 'string' && id.includes('.')) {
+                 const parts = id.split('.');
+                 if (parts[0].length === 4) { safeY = Number(parts[0]); safeM = Number(parts[1]); }
+                 else if (parts[1].length === 4) { safeY = Number(parts[1]); safeM = Number(parts[0]); }
+                 const mIdx = monthName ? MONTH_NAMES.indexOf(monthName) : -1;
+                 if ((!safeM || safeM < 1 || safeM > 12) && mIdx !== -1) safeM = mIdx + 1;
+                 safeM = Math.max(1, Math.min(12, safeM || 1));
+                 safeY = safeY && safeY >= 1900 ? safeY : 2026;
+                 id = `${safeY}-${String(safeM).padStart(2, '0')}`;
+                 month = safeM;
+                 year = safeY;
+                 monthName = MONTH_NAMES[safeM - 1];
+               }
+               return {
+                 ...item,
+                 id: id || `${year}-${String(month).padStart(2, '0')}`,
+                 month: month || (id ? parseInt(id.split('-')[1], 10) : 1),
+                 year: year || (id ? parseInt(id.split('-')[0], 10) : 2026),
+                 monthName: monthName || MONTH_NAMES[(month ? month - 1 : 0)] || '',
+                 accruals: item.accruals.map(a => ({
+                   id: a.id || generateId(),
+                   name: String(a.name || '').trim(),
+                   amount: Number(a.amount),
+                   days: a.days !== undefined ? Number(a.days) : 0,
+                   hours: a.hours || '0:0',
+                   percent: a.percent || ''
+                 })),
+                 deductions: item.deductions.map(d => ({
+                   id: d.id || generateId(),
+                   name: String(d.name || '').trim(),
+                   amount: Number(d.amount)
+                 }))
+               };
+            });
+            if (dbData && dbData.length > 0) {
+              setImportConfirmData(migratedData);
+            } else {
+              setDbData(migratedData);
+              showToast(`Дані успішно імпортовано (${migratedData.length} міс.)!`, "success");
+              handleTabChange('dashboard');
+            }
+          } catch (err) {
+            showToast("Помилка: файл не є коректним .json", "error");
+          } finally {
+            setIsRestoring(false);
+            if (backupInputRef.current) backupInputRef.current.value = '';
+          }
         };
         reader.readAsText(file);
       };
@@ -2685,15 +3147,41 @@
 
           <div className="md:hidden bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 py-3 flex items-center justify-between z-30">
             <div className="flex items-center space-x-2"><div className="bg-blue-600 p-1.5 rounded-lg text-white"><IconWallet /></div><h1 className="text-lg font-bold">SalaryHub</h1></div>
-            <div className="flex items-center gap-2"><button onClick={toggleTheme} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">{theme === 'dark' ? <IconSun /> : <IconMoon />}</button><button onClick={togglePrivateMode} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg">{isPrivateMode ? <IconEyeOff /> : <IconEye />}</button><button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"><IconMenu /></button></div>
+            <div className="flex items-center gap-2"><button onClick={toggleTheme} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg" aria-label="Змінити тему оформлення">{theme === 'dark' ? <IconSun /> : <IconMoon />}</button><button onClick={togglePrivateMode} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg" aria-label="Перемкнути приватний режим">{isPrivateMode ? <IconEyeOff /> : <IconEye />}</button><button onClick={() => setIsMobileMenuOpen(true)} className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg" aria-label="Відкрити меню навігації"><IconMenu /></button></div>
           </div>
 
           <AnimatePresence>
             {pendingTab && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4"><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white/95 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 border border-white/20 dark:border-slate-700/50"><div className="flex items-center gap-3 text-amber-600 dark:text-amber-500 mb-4"><div className="bg-amber-100 dark:bg-amber-900/30 p-2 rounded-full"><IconAlert /></div><h3 className="text-xl font-bold">Незбережені дані</h3></div><p className="text-slate-600 dark:text-slate-300 mb-6">Ви внесли зміни у форму. Якщо ви перейдете на іншу вкладку, незбережені дані будуть втрачені.</p><div className="flex justify-end gap-3 flex-wrap"><button onClick={cancelTabChange} className="px-4 py-2 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">Залишитися</button><button onClick={confirmTabChange} className="px-4 py-2 bg-rose-500 text-white font-bold rounded-xl hover:bg-rose-600 transition shadow-sm">Вийти</button></div></motion.div></motion.div>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4"><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white/95 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 border border-white/20 dark:border-slate-700/50"><div className="flex items-center gap-3 text-amber-600 dark:text-amber-500 mb-4"><div className="bg-amber-100 dark:bg-amber-900/30 p-2 rounded-full"><IconAlert /></div><h3 className="text-xl font-bold">Незбережені дані</h3></div><p className="text-slate-600 dark:text-slate-300 mb-6">Ви внесли зміни у форму. Якщо ви перейдете на іншу вкладку, незбережені дані будуть втрачені.</p><div className="flex justify-end gap-3 flex-wrap"><button onClick={cancelTabChange} className="px-4 py-2 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">Залишитися</button><button onClick={confirmTabChange} className="px-4 py-2 bg-rose-500 text-white font-bold rounded-xl hover:bg-rose-600 transition shadow-sm">Вийти</button></div></motion.div></motion.div>
+            )}
+            {importConfirmData && (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
+                <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white/95 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 border border-white/20 dark:border-slate-700/50">
+                  <div className="flex items-center gap-3 text-amber-600 dark:text-amber-500 mb-4">
+                    <div className="bg-amber-100 dark:bg-amber-900/30 p-2 rounded-full"><IconAlert /></div>
+                    <h3 className="text-xl font-bold">Перезаписати базу даних?</h3>
+                  </div>
+                  <p className="text-slate-600 dark:text-slate-300 mb-6">
+                    У вашій поточній базі вже є <b>{dbData.length}</b> розрахункових листів. Імпорт нового файлу ({importConfirmData.length} листів) замінить поточні дані. Бажаєте продовжити?
+                  </p>
+                  <div className="flex justify-end gap-3 flex-wrap">
+                    <button onClick={() => setImportConfirmData(null)} className="px-4 py-2 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">
+                      Скасувати
+                    </button>
+                    <button onClick={() => {
+                      setDbData(importConfirmData);
+                      showToast(`Дані успішно імпортовано (${importConfirmData.length} міс.)!`, "success");
+                      setImportConfirmData(null);
+                      handleTabChange('dashboard');
+                    }} className="px-4 py-2 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition shadow-sm">
+                      Замінити дані
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
             )}
             {showClearConfirm && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4"><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white/95 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 border border-white/20 dark:border-slate-700/50"><div className="flex items-center gap-3 text-rose-600 dark:text-rose-500 mb-4"><div className="bg-rose-100 dark:bg-rose-900/30 p-2 rounded-full"><IconAlert /></div><h3 className="text-xl font-bold">Очистити всі дані?</h3></div><p className="text-slate-600 dark:text-slate-300 mb-6">Ви збираєтесь видалити <b>всі розрахункові листи</b> з бази. Цю дію неможливо скасувати.</p><div className="flex justify-end gap-3 flex-wrap"><button onClick={() => setShowClearConfirm(false)} className="px-4 py-2 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">Скасувати</button><button onClick={() => { clearAllData(); setShowClearConfirm(false); }} className="px-4 py-2 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition shadow-sm">Очистити</button></div></motion.div></motion.div>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4"><motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-white/95 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 border border-white/20 dark:border-slate-700/50"><div className="flex items-center gap-3 text-rose-600 dark:text-rose-500 mb-4"><div className="bg-rose-100 dark:bg-rose-900/30 p-2 rounded-full"><IconAlert /></div><h3 className="text-xl font-bold">Очистити всі дані?</h3></div><p className="text-slate-600 dark:text-slate-300 mb-6">Ви збираєтесь видалити <b>всі розрахункові листи</b> з бази. Цю дію неможливо скасувати.</p><div className="flex justify-end gap-3 flex-wrap"><button onClick={() => setShowClearConfirm(false)} className="px-4 py-2 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">Скасувати</button><button onClick={() => { clearAllData(); setShowClearConfirm(false); }} className="px-4 py-2 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 transition shadow-sm">Очистити</button></div></motion.div></motion.div>
             )}
           </AnimatePresence>
 
@@ -2705,10 +3193,10 @@
                 <div className="bg-blue-600 p-2 rounded-lg text-white shrink-0"><IconWallet /></div>
                 <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 truncate">SalaryHub</h1>
               </div>
-              <div className="md:hidden flex items-center w-full justify-between"><div className="flex items-center space-x-2"><div className="bg-blue-600 p-1.5 rounded-lg text-white"><IconWallet /></div><span className="font-bold text-lg">Меню</span></div><button onClick={() => setIsMobileMenuOpen(false)} className="p-2 bg-slate-100 dark:bg-slate-700 rounded-full"><IconX /></button></div>
+              <div className="md:hidden flex items-center w-full justify-between"><div className="flex items-center space-x-2"><div className="bg-blue-600 p-1.5 rounded-lg text-white"><IconWallet /></div><span className="font-bold text-lg">Меню</span></div><button onClick={() => setIsMobileMenuOpen(false)} className="p-2 bg-slate-100 dark:bg-slate-700 rounded-full" aria-label="Закрити меню навігації"><IconX /></button></div>
               <div className="hidden md:flex items-center gap-1.5 shrink-0">
-                <button onClick={toggleTheme} className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-50 dark:bg-slate-700/50 rounded-lg transition-colors">{theme === 'dark' ? <IconSun /> : <IconMoon />}</button>
-                <button onClick={togglePrivateMode} className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-50 dark:bg-slate-700/50 rounded-lg transition-colors">{isPrivateMode ? <IconEyeOff /> : <IconEye />}</button>
+                <button onClick={toggleTheme} className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-50 dark:bg-slate-700/50 rounded-lg transition-colors" aria-label="Змінити тему оформлення">{theme === 'dark' ? <IconSun /> : <IconMoon />}</button>
+                <button onClick={togglePrivateMode} className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-50 dark:bg-slate-700/50 rounded-lg transition-colors" aria-label="Перемкнути приватний режим">{isPrivateMode ? <IconEyeOff /> : <IconEye />}</button>
               </div>
             </div>
             
@@ -2721,10 +3209,6 @@
                 <motion.button whileTap={{ scale: 0.95 }} onClick={() => { if (dbData.length > 0) handleTabChange('payslips'); }} disabled={dbData.length === 0} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all text-left ${activeTab === 'payslips' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed'}`}>
                   <span className="shrink-0"><IconFileText /></span>
                   <span className="truncate whitespace-normal leading-tight">Розрахункові листи</span>
-                </motion.button>
-                <motion.button whileTap={{ scale: 0.95 }} onClick={() => { if (dbData.length > 0) handleTabChange('vacation'); }} disabled={dbData.length === 0} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all text-left ${activeTab === 'vacation' ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 disabled:cursor-not-allowed'}`}>
-                  <span className="shrink-0 text-xl" style={{ filter: 'drop-shadow(0 2px 2px rgba(245, 158, 11, 0.4))' }}>🧳</span>
-                  <span className="truncate whitespace-normal leading-tight">Калькулятор відпустки</span>
                 </motion.button>
                 <div className="pt-4 mt-4 border-t border-slate-100 dark:border-slate-700">
                   <motion.button whileTap={{ scale: 0.95 }} onClick={() => handleTabChange('add')} className={`w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl font-bold transition-all ${activeTab === 'add' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 dark:bg-slate-900/50 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700/80'}`}>
@@ -2746,8 +3230,9 @@
                   <input type="file" accept=".json" className="hidden" onChange={handleImportBackup} ref={backupInputRef} disabled={isRestoring} />
                 </label>
                 
-                <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
-                  <button onClick={() => setShowClearConfirm(true)} disabled={dbData.length === 0} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"><IconTrash /> Очистити базу</button>
+                <div className="mt-4 pt-3 border-t border-slate-200/60 dark:border-slate-700/60">
+                  <div className="text-[10px] font-semibold text-slate-400/80 dark:text-slate-500/80 px-2 uppercase tracking-wider mb-1">Небезпечна зона</div>
+                  <button onClick={() => setShowClearConfirm(true)} disabled={dbData.length === 0} className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-xs font-medium text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50/50 dark:hover:bg-rose-950/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"><IconTrash /> Очистити базу</button>
                 </div>
               </div>
             </nav>
@@ -2757,7 +3242,6 @@
             <AnimatePresence mode="wait">
               {activeTab === 'dashboard' && <DashboardView key="dashboard" />}
               {activeTab === 'payslips' && <PayslipView key="payslips" />}
-              {activeTab === 'vacation' && <VacationCalculatorView key="vacation" />}
               {activeTab === 'add' && <AddPayslipView key="add" />}
             </AnimatePresence>
           </main>
@@ -2766,26 +3250,53 @@
     };
 
     class ErrorBoundary extends React.Component {
-      constructor(props) { super(props); this.state = { hasError: false, errorInfo: null }; }
-      static getDerivedStateFromError(error) { return { hasError: true }; }
+      constructor(props) { super(props); this.state = { hasError: false, error: null, errorInfo: null }; }
+      static getDerivedStateFromError(error) { return { hasError: true, error }; }
       componentDidCatch(error, errorInfo) { 
         console.error("Критична помилка додатку:", error, errorInfo); 
-        this.setState({ errorInfo });
+        this.setState({ error, errorInfo });
       }
+      handleDownloadBackup = () => {
+        try {
+          const raw = window.localStorage.getItem('salaryHubData') || '[]';
+          const blob = new Blob([raw], { type: 'application/json;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `salaryhub_emergency_backup_${new Date().toISOString().slice(0, 10)}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        } catch (e) {
+          alert("Не вдалося створити резервну копію: " + e.message);
+        }
+      };
       render() {
         if (this.state.hasError) {
           return (
             <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900 p-4 font-sans">
-              <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-xl max-w-md w-full border border-rose-200 dark:border-rose-900/50 text-center">
+              <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-xl max-w-lg w-full border border-rose-200 dark:border-rose-900/50 text-center">
                 <div className="w-16 h-16 bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-full flex items-center justify-center mx-auto mb-4">
                   <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
                 </div>
                 <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-2">Ой, щось пішло не так</h2>
-                <p className="text-slate-500 dark:text-slate-400 mb-6">Додаток зіткнувся з непередбачуваною помилкою. Спробуйте оновити сторінку.</p>
+                <p className="text-slate-500 dark:text-slate-400 mb-6">Додаток зіткнувся з непередбачуваною помилкою. Ви можете зберегти резервну копію перед очищенням даних.</p>
                 <div className="space-y-3">
+                  <button onClick={this.handleDownloadBackup} className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition flex items-center justify-center gap-2 shadow-sm">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Зберегти аварійний бекап (JSON)
+                  </button>
                   <button onClick={() => window.location.reload()} className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition">Оновити сторінку</button>
                   <button onClick={() => { window.localStorage.removeItem('salaryHubData'); window.location.reload(); }} className="w-full py-3 bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-400 font-bold rounded-xl hover:bg-rose-100 dark:hover:bg-rose-900/40 transition">Скинути всі дані та перезавантажити</button>
                 </div>
+                {this.state.error && (
+                  <details className="mt-5 p-3 text-left bg-slate-50 dark:bg-slate-900 rounded-xl text-xs text-rose-500 font-mono overflow-auto max-h-48 border border-rose-200 dark:border-rose-900/50">
+                    <summary className="cursor-pointer font-bold mb-1 select-none text-slate-700 dark:text-slate-300">Деталі помилки для розробника</summary>
+                    <p className="font-bold whitespace-pre-wrap">{this.state.error.toString()}</p>
+                    {this.state.errorInfo && <pre className="whitespace-pre-wrap mt-2 text-[10px] text-slate-500 dark:text-slate-400">{this.state.errorInfo.componentStack}</pre>}
+                  </details>
+                )}
               </div>
             </div>
           );
@@ -2805,5 +3316,4 @@
     root.render(<App />);
   </script>
 </body>
-</html>
-```eof
+</html>

@@ -1,0 +1,24 @@
+{
+  "name": "salaryhub-main",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test/audit_verification.test.js && node test/desktop_ui_polish.test.js && node test/audit_fixes_verification.test.js && node test/verify_all_34_sheets.js && node test/audit_2026_10_21_regression.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Danagar42/SalaryHub.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Danagar42/SalaryHub/issues"
+  },
+  "homepage": "https://github.com/Danagar42/SalaryHub#readme",
+  "dependencies": {
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  }
+}
